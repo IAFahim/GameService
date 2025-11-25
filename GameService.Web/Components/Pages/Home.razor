@@ -1,14 +1,21 @@
 ﻿@page "/"
-@using GameService.Web
-@inject GameApiClient GameApi
-@attribute [StreamRendering(true)]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using GameService.ServiceDefaults.Data
+@using System.Security.Claims
+
+@attribute [Authorize]
 @rendermode InteractiveServer
 
-<PageTitle>Admin Dashboard</PageTitle>
+@inject GameDbContext Db
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Player Management</PageTitle>
 
 <h1>Player Management</h1>
-
-<p>Admin panel to view and manage game users.</p>
+<p>Manage registered players and admins.</p>
 
 @if (users == null)
 {
@@ -17,24 +24,30 @@
 else
 {
     <div class="table-responsive">
-        <table class="table table-striped table-hover">
+        <table class="table table-striped table-hover align-middle">
             <thead class="table-dark">
             <tr>
-                <th>ID</th>
+                <th>Profile ID</th>
                 <th>Username</th>
                 <th>Email</th>
-                <th>Actions</th>
+                <th>Coins</th>
+                <th class="text-end">Actions</th>
             </tr>
             </thead>
             <tbody>
             @foreach (var user in users)
             {
-                <tr>
-                    <td>@user.Id</td>
-                    <td>@user.Username</td>
+                var isMe = user.UserId == currentUserId;
+                <tr class="@(isMe ? "table-info" : "")">
+                    <td>@user.ProfileId</td>
+                    <td>@user.Username @(isMe ? "(You)" : "")</td>
                     <td>@user.Email</td>
-                    <td>
-                        <button class="btn btn-danger btn-sm" @onclick="() => DeleteUser(user.Id)">
+                    <td>@user.Coins.ToString("N0")</td>
+                    <td class="text-end">
+                        <button class="btn btn-danger btn-sm" 
+                                @onclick="() => DeleteUser(user.ProfileId)"
+                                disabled="@isMe"
+                                title="@(isMe ? "You cannot remove yourself" : "Delete User")">
                             Delete
                         </button>
                     </td>
@@ -46,25 +59,47 @@ else
 }
 
 @code {
-    private UserResponse[]? users;
+    private List<UserViewModel>? users;
+    private string? currentUserId;
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        
         await LoadUsers();
     }
 
     private async Task LoadUsers()
     {
-        users = await GameApi.GetUsersAsync();
+        // FIX: OrderBy must happen BEFORE Select when projecting to a DTO/Record
+        // This ensures EF Core generates "ORDER BY Id" in SQL before transforming the result.
+        users = await Db.PlayerProfiles
+            .AsNoTracking() // Performance: We don't need to track these for read-only display
+            .OrderBy(p => p.Id) 
+            .Select(p => new UserViewModel(
+                p.Id,
+                p.UserId,
+                p.User.UserName ?? "Unknown",
+                p.User.Email ?? "No Email",
+                p.Coins
+            ))
+            .ToListAsync();
     }
 
-    private async Task DeleteUser(int id)
+    private async Task DeleteUser(int profileId)
     {
-        bool confirmed = true;
-        if (confirmed)
+        var profile = await Db.PlayerProfiles.Include(p => p.User).FirstOrDefaultAsync(p => p.Id == profileId);
+        
+        if (profile is not null)
         {
-            await GameApi.DeleteUserAsync(id);
+            // Security check
+            if (profile.UserId == currentUserId) return;
+
+            await UserManager.DeleteAsync(profile.User);
             await LoadUsers();
         }
     }
+
+    public record UserViewModel(int ProfileId, string UserId, string Username, string Email, long Coins);
 }

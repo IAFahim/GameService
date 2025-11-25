@@ -42,12 +42,11 @@ if (app.Environment.IsDevelopment())
         {
             db.PlayerProfiles.Add(new PlayerProfile { UserId = admin.Id, Coins = 1_000_000 });
             await db.SaveChangesAsync();
-            Console.WriteLine($"✅ Admin Created: {adminEmail} / {adminPass}");
+            Console.WriteLine($"✅ Admin Created: {adminEmail}");
         }
     }
 }
 
-// FIX: Group Identity endpoints under /auth to match your .http file
 app.MapGroup("/auth").MapIdentityApi<ApplicationUser>();
 
 var gameGroup = app.MapGroup("/game").RequireAuthorization();
@@ -59,7 +58,6 @@ gameGroup.MapGet("/me", async (HttpContext ctx, GameDbContext db) =>
 
     var profile = await db.PlayerProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
 
-    // FIX: Lazy Create Profile if it doesn't exist yet (because Register only creates the User)
     if (profile is null)
     {
         profile = new PlayerProfile { UserId = userId, Coins = 100 };
@@ -75,13 +73,13 @@ gameGroup.MapPost("/coins/transaction", async (UpdateCoinRequest req, HttpContex
     var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
     var profile = await db.PlayerProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
     
-    // Auto-create here too just in case
     if (profile is null)
     {
         profile = new PlayerProfile { UserId = userId!, Coins = 100 };
         db.PlayerProfiles.Add(profile);
     }
 
+    // Fix: Validate bounds to prevent overflow or logic errors
     if (req.Amount < 0 && profile.Coins + req.Amount < 0) return Results.BadRequest("Insufficient funds");
 
     profile.Coins += req.Amount;
@@ -91,7 +89,8 @@ gameGroup.MapPost("/coins/transaction", async (UpdateCoinRequest req, HttpContex
     return Results.Ok(new { NewBalance = profile.Coins });
 });
 
-var adminGroup = app.MapGroup("/admin");
+// FIX: Secure Admin endpoints and logic
+var adminGroup = app.MapGroup("/admin").RequireAuthorization();
 
 adminGroup.MapGet("/users", async (GameDbContext db) =>
 {
@@ -108,13 +107,21 @@ adminGroup.MapGet("/users", async (GameDbContext db) =>
     return Results.Ok(users);
 });
 
-adminGroup.MapDelete("/users/{id}", async (int id, GameDbContext db, UserManager<ApplicationUser> userManager) =>
+adminGroup.MapDelete("/users/{id}", async (int id, HttpContext ctx, GameDbContext db, UserManager<ApplicationUser> userManager) =>
 {
+    var currentUserId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    
     var profile = await db.PlayerProfiles
         .Include(p => p.User)
         .FirstOrDefaultAsync(p => p.Id == id);
 
     if (profile is null) return Results.NotFound();
+
+    // Security: Prevent self-deletion
+    if (profile.UserId == currentUserId)
+    {
+        return Results.BadRequest("You cannot delete yourself.");
+    }
 
     await userManager.DeleteAsync(profile.User);
     

@@ -9,10 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.AddRedisOutputCache("cache");
 
-builder.Services.AddHttpClient<GameApiClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://apiservice"); 
-});
+// REMOVED: GameApiClient (Dead code, using direct DB access for Admin Panel efficiency)
 
 builder.AddNpgsqlDbContext<GameDbContext>("postgresdb");
 

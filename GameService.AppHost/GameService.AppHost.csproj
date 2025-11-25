@@ -1,0 +1,22 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.0.0">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>fc9d1fa4-d473-492c-8de0-f1962f919be9</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GameService.ApiService\GameService.ApiService.csproj" />
+    <ProjectReference Include="..\GameService.Web\GameService.Web.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.DevTunnels" Version="13.0.0-preview.1.25560.3" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.0.0" />
+    <PackageReference Include="Aspire.Hosting.Redis" Version="13.0.0" />
+  </ItemGroup>
+
+</Project>

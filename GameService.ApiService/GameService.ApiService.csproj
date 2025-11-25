@@ -4,8 +4,9 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <!-- Enable AOT -->
-        <PublishAot>true</PublishAot>
+        <!-- AOT requires 'dotnet ef dbcontext optimize' (Compiled Models). 
+             Disabling temporarily to fix the runtime crash. -->
+        <PublishAot>false</PublishAot>
         <InvariantGlobalization>true</InvariantGlobalization>
     </PropertyGroup>
 
@@ -16,11 +17,9 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
         <PackageReference Include="Aspire.StackExchange.Redis.OutputCaching" Version="13.0.0" />
-        <!-- Use Npgsql EF Core -->
         <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.5.2" />
         <PackageReference Include="AspNetCore.HealthChecks.Uris" Version="9.0.0" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
-        <!-- Lightweight crypto for AOT -->
         <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     </ItemGroup>
 

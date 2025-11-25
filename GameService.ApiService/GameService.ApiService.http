@@ -1,6 +1,158 @@
-@ApiService_HostAddress = http://localhost:5525
+# ==========================================
+# 🎮 GAME SERVICE API SUITE
+# ==========================================
+# Best Dotnet Dev Approved
+# Usage: Run "Register", then "Login". Tokens are auto-saved.
 
-GET {{ApiService_HostAddress}}/weatherforecast/
-Accept: application/json
+# ⚙️ Configuration
+@hostname = localhost
+@port = 5525
+@host = http://{{hostname}}:{{port}}
+@contentType = application/json
+
+# 👤 Test User Credentials
+@username = pro_gamer_99
+@email = progamer@gameservice.com
+@password = Hunter2!Secure
+@newPassword = Hunter3!MoreSecure
+
+# ==========================================
+# 🏥 SYSTEM HEALTH
+# ==========================================
+
+### Health Check
+GET {{host}}/health
+
+### Liveness Check
+GET {{host}}/alive
 
 ###
+
+# ==========================================
+# 🔐 AUTHENTICATION FLOW
+# ==========================================
+
+### 1️⃣ Register New User
+# Expected: 200 OK with User details
+POST {{host}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "username": "{{username}}",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+    if (response.status === 200) {
+        client.log("✅ User Registered: " + response.body.username);
+    } else if (response.status === 409) {
+        client.log("⚠️ User already exists (Expected if running twice)");
+    }
+%}
+
+###
+
+### 2️⃣ Login (Get Tokens)
+# Expected: 200 OK with Access & Refresh Tokens
+POST {{host}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+> {%
+    if (response.status === 200) {
+        // 💾 Smart Save: Capture both tokens
+        client.global.set("auth_token", response.body.accessToken);
+        client.global.set("refresh_token", response.body.refreshToken);
+
+        client.log("✅ Login Success");
+        client.log("🔑 Access Token: " + response.body.accessToken.substring(0, 15) + "...");
+        client.log("🔄 Refresh Token: " + response.body.refreshToken.substring(0, 15) + "...");
+    } else {
+        client.log("❌ Login Failed: " + response.status);
+    }
+%}
+
+###
+
+### 3️⃣ Refresh Token
+# Use this when Access Token expires
+POST {{host}}/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{refresh_token}}"
+}
+
+> {%
+    if (response.status === 200) {
+        client.global.set("auth_token", response.body.accessToken);
+        client.global.set("refresh_token", response.body.refreshToken);
+        client.log("✅ Tokens Refreshed Successfully");
+    }
+%}
+
+###
+
+### 4️⃣ Change Password
+# Requires: Valid Bearer Token
+POST {{host}}/auth/change-password
+Authorization: Bearer {{auth_token}}
+Content-Type: {{contentType}}
+
+{
+  "oldPassword": "{{password}}",
+  "newPassword": "{{newPassword}}"
+}
+
+###
+
+### 5️⃣ Logout (Revoke Refresh Token)
+POST {{host}}/auth/logout
+Authorization: Bearer {{auth_token}}
+Content-Type: {{contentType}}
+
+###
+
+# ==========================================
+# 👑 ADMIN / USER MANAGEMENT
+# ==========================================
+
+### Get All Users
+# Currently public in dev, implies Admin rights
+GET {{host}}/admin/users
+Authorization: Bearer {{auth_token}}
+
+###
+
+### Delete User
+# Replace '1' with an actual ID from the Get All Users list
+DELETE {{host}}/admin/users/1
+Authorization: Bearer {{auth_token}}
+
+###
+
+# ==========================================
+# 🛡️ SECURITY & ERROR HANDLING
+# ==========================================
+
+### Test: Login with Wrong Password
+POST {{host}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "username": "{{username}}",
+  "password": "WrongPassword123"
+}
+
+> {%
+    if (response.status === 401) {
+        client.log("✅ Security Check Passed: 401 Unauthorized received");
+    } else {
+        client.log("❌ Security Check Failed: Expected 401");
+    }
+%}

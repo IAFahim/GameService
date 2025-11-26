@@ -33,6 +33,7 @@ public class PlayerService(GameDbContext db, IGameEventPublisher publisher) : IP
             }
             catch (DbUpdateException) 
             {
+                db.ChangeTracker.Clear();
                 profile = await db.PlayerProfiles.AsNoTracking().FirstAsync(p => p.UserId == userId);
             }
         }

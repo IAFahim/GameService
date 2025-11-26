@@ -1,4 +1,5 @@
 using GameService.ServiceDefaults.Data;
+using GameService.ServiceDefaults.Security;
 using GameService.Web;
 using GameService.Web.Services;
 using GameService.Web.Components;
@@ -51,6 +52,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddEntityFrameworkStores<GameDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
+
+// Security: Use Argon2 (Shared with API)
+builder.Services.AddScoped<IPasswordHasher<ApplicationUser>, Argon2PasswordHasher>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

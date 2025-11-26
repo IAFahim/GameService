@@ -4,7 +4,7 @@ using GameService.ServiceDefaults.Data;
 using Konscious.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
 
-namespace GameService.ApiService.Infrastructure.Security;
+namespace GameService.ServiceDefaults.Security;
 
 public class Argon2PasswordHasher : IPasswordHasher<ApplicationUser>
 {
@@ -19,17 +19,28 @@ public class Argon2PasswordHasher : IPasswordHasher<ApplicationUser>
 
     public PasswordVerificationResult VerifyHashedPassword(ApplicationUser user, string hashedPassword, string providedPassword)
     {
-        var parts = hashedPassword.Split('$');
-        if (parts.Length != 6) return PasswordVerificationResult.Failed;
+        try 
+        {
+            var parts = hashedPassword.Split('$');
+            if (parts.Length != 6) return PasswordVerificationResult.Failed;
 
-        var salt = Convert.FromBase64String(parts[4]);
-        var storedHash = Convert.FromBase64String(parts[5]);
+            var salt = Convert.FromBase64String(parts[4]);
+            var storedHash = Convert.FromBase64String(parts[5]);
 
-        var newHash = HashPassword(providedPassword, salt);
+            var newHash = HashPassword(providedPassword, salt);
 
-        return CryptographicOperations.FixedTimeEquals(storedHash, newHash)
-            ? PasswordVerificationResult.Success
-            : PasswordVerificationResult.Failed;
+            return CryptographicOperations.FixedTimeEquals(storedHash, newHash)
+                ? PasswordVerificationResult.Success
+                : PasswordVerificationResult.Failed;
+        }
+        catch (FormatException)
+        {
+            return PasswordVerificationResult.Failed;
+        }
+        catch (Exception)
+        {
+            return PasswordVerificationResult.Failed;
+        }
     }
 
     private byte[] CreateSalt()

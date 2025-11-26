@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GameService.ServiceDefaults;
 using GameService.ServiceDefaults.DTOs;
 using GameService.Web.Services;
 using StackExchange.Redis;
@@ -20,7 +21,7 @@ public class RedisLogStreamer(
     {
         var sub = redis.GetSubscriber();
         // Use pattern matching or specific channel
-        var channel = await sub.SubscribeAsync("player_updates");
+        var channel = await sub.SubscribeAsync(GameConstants.PlayerUpdatesChannel);
 
         logger.LogInformation("🔴 Connected to Redis. Listening for player updates...");
 
@@ -57,7 +58,7 @@ public class RedisLogStreamer(
         {
             // Cleanup
             if (redis.IsConnected)
-                await sub.UnsubscribeAsync("player_updates");
+                await sub.UnsubscribeAsync(GameConstants.PlayerUpdatesChannel);
         }
     }
 }

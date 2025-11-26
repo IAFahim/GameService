@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GameService.ServiceDefaults;
 using GameService.ServiceDefaults.DTOs;
 using StackExchange.Redis;
 
@@ -9,6 +10,6 @@ public class RedisGameEventPublisher(IConnectionMultiplexer redis) : IGameEventP
     public async Task PublishPlayerUpdatedAsync(PlayerUpdatedMessage message)
     {
         var json = JsonSerializer.Serialize(message, GameJsonContext.Default.PlayerUpdatedMessage);
-        await redis.GetSubscriber().PublishAsync(RedisChannel.Literal("player_updates"), json);
+        await redis.GetSubscriber().PublishAsync(RedisChannel.Literal(GameConstants.PlayerUpdatesChannel), json);
     }
 }

@@ -58,7 +58,9 @@ public class EconomyServiceTests
     {
         // Arrange
         var userId = "user2";
-        _db.PlayerProfiles.Add(new PlayerProfile { UserId = userId, Coins = 50 });
+        var user = new ApplicationUser { Id = userId, UserName = "user2", Email = "user2@example.com" };
+        _db.Users.Add(user);
+        _db.PlayerProfiles.Add(new PlayerProfile { UserId = userId, Coins = 50, User = user });
         await _db.SaveChangesAsync();
 
         // Act
@@ -73,7 +75,8 @@ public class EconomyServiceTests
         }
 
         result.Success.Should().BeFalse();
-        result.Error.Should().Contain("Insufficient funds");
+        result.ErrorMessage.Should().Contain("Insufficient funds");
+        result.ErrorType.Should().Be(TransactionErrorType.InsufficientFunds);
         
         // Reload from DB to ensure no changes
         _db.ChangeTracker.Clear();

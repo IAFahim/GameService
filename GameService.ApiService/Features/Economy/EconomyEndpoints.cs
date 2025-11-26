@@ -26,11 +26,10 @@ public static class EconomyEndpoints
         if (!result.Success)
         {
             // Determine if it's a 400 or 409 based on error message or add ErrorType enum
-            // For simplicity, if error contains "concurrent", return 409
-            if (result.Error?.Contains("concurrent") == true)
-                return Results.Conflict(result.Error);
+            if (result.ErrorType == TransactionErrorType.ConcurrencyConflict)
+                return Results.Conflict(result.ErrorMessage);
             
-            return Results.BadRequest(result.Error);
+            return Results.BadRequest(result.ErrorMessage);
         }
 
         return Results.Ok(new { NewBalance = result.NewBalance });

@@ -43,7 +43,7 @@ else
                 var isMe = user.UserId == currentUserId;
                 var rowClass = isMe ? "table-info" : (updatedUserIds.Contains(user.UserId) ? "table-warning" : "");
                 
-                <tr class="@rowClass" @key="user.UserId">
+                <tr class="@rowClass" @key="user.UserId" data-testid="user-row-@user.UserId">
                     <td>@user.ProfileId</td>
                     <td>@user.Username @(isMe ? "(You)" : "")</td>
                     <td>@user.Email</td>
@@ -52,7 +52,8 @@ else
                         <button class="btn btn-danger btn-sm" 
                                 @onclick="() => DeleteUser(user.ProfileId)"
                                 disabled="@isMe"
-                                title="@(isMe ? "You cannot remove yourself" : "Delete User")">
+                                title="@(isMe ? "You cannot remove yourself" : "Delete User")"
+                                data-testid="delete-user-@user.UserId">
                             Delete
                         </button>
                     </td>

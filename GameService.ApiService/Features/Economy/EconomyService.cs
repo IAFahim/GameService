@@ -10,13 +10,15 @@ public interface IEconomyService
     Task<TransactionResult> ProcessTransactionAsync(string userId, long amount);
 }
 
-public record TransactionResult(bool Success, long NewBalance, string? Error = null);
+public enum TransactionErrorType { None, InvalidAmount, InsufficientFunds, ConcurrencyConflict, Unknown }
+
+public record TransactionResult(bool Success, long NewBalance, TransactionErrorType ErrorType = TransactionErrorType.None, string? ErrorMessage = null);
 
 public class EconomyService(GameDbContext db, IGameEventPublisher publisher) : IEconomyService
 {
     public async Task<TransactionResult> ProcessTransactionAsync(string userId, long amount)
     {
-        if (amount == 0) return new TransactionResult(false, 0, "Amount cannot be zero");
+        if (amount == 0) return new TransactionResult(false, 0, TransactionErrorType.InvalidAmount, "Amount cannot be zero");
 
         var strategy = db.Database.CreateExecutionStrategy();
 
@@ -31,14 +33,16 @@ public class EconomyService(GameDbContext db, IGameEventPublisher publisher) : I
 
                 if (profile is null)
                 {
-                    profile = new PlayerProfile { UserId = userId, Coins = 100 };
+                    // Fix: Load user to ensure we have data for the event
+                    var user = await db.Users.FindAsync(userId);
+                    profile = new PlayerProfile { UserId = userId, Coins = 100, User = user! };
                     db.PlayerProfiles.Add(profile);
                 }
 
                 // Check for insufficient funds
                 if (amount < 0 && (profile.Coins + amount < 0))
                 {
-                    return new TransactionResult(false, profile.Coins, "Insufficient funds");
+                    return new TransactionResult(false, profile.Coins, TransactionErrorType.InsufficientFunds, "Insufficient funds");
                 }
 
                 profile.Coins += amount;
@@ -55,11 +59,11 @@ public class EconomyService(GameDbContext db, IGameEventPublisher publisher) : I
 
                 await publisher.PublishPlayerUpdatedAsync(message);
 
-                return new TransactionResult(true, profile.Coins);
+                return new TransactionResult(true, profile.Coins, TransactionErrorType.None);
             }
             catch (DbUpdateConcurrencyException)
             {
-                return new TransactionResult(false, 0, "Transaction failed due to concurrent modification. Please retry.");
+                return new TransactionResult(false, 0, TransactionErrorType.ConcurrencyConflict, "Transaction failed due to concurrent modification. Please retry.");
             }
         });
     }

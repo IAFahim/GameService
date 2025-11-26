@@ -4,7 +4,6 @@ using GameService.ApiService.Features.Economy;
 using GameService.ServiceDefaults.Data;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using NUnit.Framework;
 
 namespace GameService.UnitTests.Features.Economy;
 
@@ -98,4 +97,5 @@ public class EconomyServiceTests
             m.UserId == userId && m.NewCoins == 150
         )), Times.Once);
     }
+    
 }

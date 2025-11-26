@@ -1,0 +1,58 @@
+name: GameService CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # Based on your logs showing 'net10.0'. 
+          # Note: If .NET 10 is not yet public/available in GitHub Actions, 
+          # change this to '8.0.x' or '9.0.x' accordingly.
+          dotnet-version: '10.0.x'
+          include-prerelease: true
+      
+      # Crucial for Aspire projects: The workload must be installed on the CI runner
+      - name: Install Aspire Workload
+        run: dotnet workload install aspire
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+      
+      # Group 1: Fast Tests (Unit, Component, Architecture)
+      # These run completely in-memory and don't require containers.
+      - name: Run Unit, Component & Architecture Tests
+        run: |
+          dotnet test GameService.UnitTests/GameService.UnitTests.csproj --no-build --configuration Release --logger "trx;LogFileName=unit-results.trx"
+          dotnet test GameService.ComponentTests/GameService.ComponentTests.csproj --no-build --configuration Release --logger "trx;LogFileName=component-results.trx"
+          dotnet test GameService.ArchitectureTests/GameService.ArchitectureTests.csproj --no-build --configuration Release --logger "trx;LogFileName=arch-results.trx"
+      
+      # Group 2: Integration Tests (Aspire AppHost)
+      # These tests spin up actual Docker containers (Redis, Postgres).
+      # The 'ubuntu-latest' runner has Docker installed by default, so this works out of the box.
+      - name: Run Aspire Integration Tests
+        run: |
+          dotnet test GameService.Tests/GameService.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=integration-results.trx"
+      
+      # Optional: Upload Test Results to GitHub UI so you can see why they failed
+      - name: Upload Test Results
+        if: always() # Run this even if tests fail
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/*.trx'

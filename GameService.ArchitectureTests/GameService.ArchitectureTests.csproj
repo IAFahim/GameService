@@ -10,14 +10,11 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
-    <PackageReference Include="FluentAssertions" Version="8.8.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
-    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="NetArchTest.Rules" Version="1.3.2" />
     <PackageReference Include="NUnit" Version="4.3.2" />
     <PackageReference Include="NUnit.Analyzers" Version="4.7.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
-    <PackageReference Include="Verify" Version="31.7.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,6 +23,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GameService.ApiService\GameService.ApiService.csproj" />
+    <ProjectReference Include="..\GameService.Web\GameService.Web.csproj" />
+    <ProjectReference Include="..\GameService.ServiceDefaults\GameService.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

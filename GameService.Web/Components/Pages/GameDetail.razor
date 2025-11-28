@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject GameAdminService AdminService
 @inject NavigationManager Nav
+@using GameService.Ludo.Components
 
 <PageTitle>Game Inspector: @RoomId</PageTitle>
 
@@ -22,115 +23,17 @@
 }
 else
 {
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card mb-4">
-                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                    <h4 class="mb-0">Game State</h4>
-                    <button class="btn btn-sm btn-light" @onclick="LoadGame">Refresh</button>
-                </div>
-                <div class="card-body">
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <strong>Current Player Seat:</strong> <span class="badge bg-primary fs-5">@game.Engine.State.CurrentPlayer</span>
-                        </div>
-                        <div class="col-md-4">
-                            <strong>Last Roll:</strong> <span class="badge bg-secondary fs-5">@game.Engine.State.LastDiceRoll</span>
-                        </div>
-                        <div class="col-md-4">
-                            <strong>Winner:</strong> 
-                            @if(game.Engine.State.Winner != 255)
-                            {
-                                <span class="badge bg-success">Seat @game.Engine.State.Winner</span>
-                            }
-                            else
-                            {
-                                <span class="text-muted">None</span>
-                            }
-                        </div>
-                    </div>
-
-                    <hr />
-                    
-                    <h5>Tokens</h5>
-                    <div class="table-responsive">
-                        <table class="table table-bordered text-center">
-                            <thead>
-                                <tr>
-                                    <th>Player (Seat)</th>
-                                    <th>Token 0</th>
-                                    <th>Token 1</th>
-                                    <th>Token 2</th>
-                                    <th>Token 3</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @for (int i = 0; i < 4; i++)
-                                {
-                                    var isActive = (game.Engine.State.ActiveSeats & (1 << i)) != 0;
-                                    <tr class="@(isActive ? (game.Engine.State.CurrentPlayer == i ? "table-primary" : "") : "table-secondary text-muted")">
-                                        <td>
-                                            Seat @i
-                                            @if(!isActive) { <small>(Inactive)</small> }
-                                        </td>
-                                        @for (int t = 0; t < 4; t++)
-                                        {
-                                            <td>@game.Engine.State.GetTokenPos(i, t)</td>
-                                        }
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card mb-4">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0">God Mode Controls</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted">Force actions on behalf of the current player.</p>
-                    
-                    <h6>Force Dice Roll</h6>
-                    <div class="d-grid gap-2 d-md-block">
-                        @for (int i = 1; i <= 6; i++)
-                        {
-                            var val = i;
-                            <button class="btn btn-outline-danger me-1 mb-1" @onclick="() => ForceRoll(val)">
-                                @val
-                            </button>
-                        }
-                    </div>
-                    
-                    <hr />
-                    
-                    <div class="d-grid">
-                        <button class="btn btn-danger" @onclick="DeleteGame">
-                            Terminate Game
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="card">
-                <div class="card-header">
-                    Players
-                </div>
-                <ul class="list-group list-group-flush">
-                    @foreach (var p in game.Meta.PlayerSeats)
-                    {
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span class="text-truncate" title="@p.Key">@p.Key</span>
-                            <span class="badge bg-secondary">Seat @p.Value</span>
-                        </li>
-                    }
-                </ul>
-            </div>
-        </div>
-    </div>
+    @if (game.Meta.GameType == "Ludo")
+    {
+        <LudoAdminPanel Game="@game" 
+                        OnRefresh="LoadGame" 
+                        OnForceRoll="ForceRoll" 
+                        OnTerminate="DeleteGame" />
+    }
+    else
+    {
+        <div class="alert alert-warning">Unknown game type: @game.Meta.GameType</div>
+    }
 }
 
 @code {
@@ -146,8 +49,6 @@ else
 
     private async Task LoadGame()
     {
-        // We don't have a direct "GetGame" endpoint, so we fetch all and filter.
-        // Optimization: Add GetGame endpoint later.
         var games = await AdminService.GetActiveGamesAsync();
         game = games.FirstOrDefault(g => g.RoomId == RoomId);
         

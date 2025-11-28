@@ -47,11 +47,17 @@ else
                     <td>@user.ProfileId</td>
                     <td>@user.Username @(isMe ? "(You)" : "")</td>
                     <td>@user.Email</td>
-                    <td>@user.Coins.ToString("N0")</td>
+                    <td>
+                        @user.Coins.ToString("N0")
+                        <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="() => EditCoins(user)">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </td>
                     <td class="text-end">
                         <button class="btn btn-danger btn-sm" 
                                 @onclick="() => DeleteUser(user.ProfileId)"
-                                title="Delete User"
+                                disabled="@isMe"
+                                title="@(isMe ? "You cannot remove yourself" : "Delete User")"
                                 data-testid="delete-user-@user.UserId">
                             Delete
                         </button>
@@ -63,10 +69,37 @@ else
     </div>
 }
 
+@if (editingUser != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Coins for @editingUser.Username</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEdit"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Amount to Add (use negative to subtract)</label>
+                        <input type="number" class="form-control" @bind="coinAmount" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseEdit">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveCoins">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<UserViewModel>? users;
     private string? currentUserId;
     private readonly HashSet<string> updatedUserIds = new();
+    
+    private UserViewModel? editingUser;
+    private long coinAmount;
 
     protected override async Task OnInitializedAsync()
     {
@@ -111,6 +144,43 @@ else
         });
     }
 
+    private void EditCoins(UserViewModel user)
+    {
+        editingUser = user;
+        coinAmount = 0;
+    }
+
+    private void CloseEdit()
+    {
+        editingUser = null;
+    }
+
+    private async Task SaveCoins()
+    {
+        if (editingUser == null || coinAmount == 0) return;
+
+        // We need an endpoint for admin to update coins without transaction limits?
+        // Or just use the transaction endpoint but impersonating?
+        // For now, let's use the EconomyService directly via a new Admin endpoint or just direct DB access since this is server-side Blazor.
+        // Direct DB access is easiest for this "God Mode" feature.
+        
+        using var db = await DbFactory.CreateDbContextAsync();
+        var profile = await db.PlayerProfiles.FirstOrDefaultAsync(p => p.UserId == editingUser.UserId);
+        if (profile != null)
+        {
+            profile.Coins += coinAmount;
+            await db.SaveChangesAsync();
+            
+            // Notify updates
+            var user = await db.Users.FindAsync(editingUser.UserId);
+            var message = new PlayerUpdatedMessage(editingUser.UserId, profile.Coins, user?.UserName, user?.Email);
+            Notifier.Notify(message);
+        }
+
+        CloseEdit();
+        await LoadUsers();
+    }
+
     private async Task LoadUsers()
     {
         using var db = await DbFactory.CreateDbContextAsync();
@@ -144,15 +214,12 @@ else
         
         if (profile is not null)
         {
+            if (profile.UserId == currentUserId) return;
+
             db.Users.Remove(profile.User);
             await db.SaveChangesAsync();
             
             await LoadUsers();
-            
-            if (profile.UserId == currentUserId)
-            {
-                Nav.NavigateTo("Account/Login", true);
-            }
         }
     }
 

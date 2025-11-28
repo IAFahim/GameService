@@ -90,6 +90,7 @@ else
         {
             await AdminService.CreateGameAsync();
             await LoadGames();
+            StateHasChanged();
         }
         catch (Exception ex)
         {

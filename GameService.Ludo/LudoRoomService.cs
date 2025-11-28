@@ -126,6 +126,7 @@ public record LudoRoomMeta
 {
     public Dictionary<string, int> PlayerSeats { get; set; } = new();
     public bool IsPublic { get; set; }
+    public string GameType { get; set; } = "Ludo";
 }
 
 public record LudoContext(string RoomId, LudoEngine Engine, LudoRoomMeta Meta);

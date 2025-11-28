@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using System.Threading.RateLimiting;
 
 using GameService.ApiService.Features.Common;
+using GameService.ApiService.Features.Admin;
 using GameService.Ludo;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -78,6 +79,7 @@ app.UseRateLimiter();
 app.MapAuthEndpoints();
 app.MapPlayerEndpoints();
 app.MapEconomyEndpoints();
+app.MapAdminEndpoints();
 
 app.MapHub<GameHub>("/hubs/game");
 app.MapHub<LudoHub>("/hubs/ludo"); 

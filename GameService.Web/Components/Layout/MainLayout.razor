@@ -6,26 +6,33 @@
     </div>
 
     <main>
-        <div class="top-row px-4">
-            <!-- Fix: Add Context="authContext" to the Authorized tag -->
-            <AuthorizeView>
-                <Authorized Context="authContext">
-                    <span class="me-3">Hello, @authContext.User.Identity?.Name!</span>
-                    
-                    <form action="Account/Logout" method="post">
-                        <AntiforgeryToken />
-                        <input type="hidden" name="ReturnUrl" value="" />
-                        <button type="submit" class="btn btn-link">Logout</button>
-                    </form>
-                </Authorized>
-                <NotAuthorized>
-                    <a href="Account/Login">Login</a>
-                </NotAuthorized>
-            </AuthorizeView>
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        <div class="top-row px-4 d-flex justify-content-between align-items-center">
+            <div class="fw-bold text-secondary">
+                Admin Dashboard
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <AuthorizeView>
+                    <Authorized Context="authContext">
+                        <span class="badge bg-primary rounded-pill">@authContext.User.Identity?.Name</span>
+                        
+                        <a href="Account/ChangePassword" class="btn btn-sm btn-outline-secondary" title="Change Password">
+                            <i class="bi bi-key"></i>
+                        </a>
+
+                        <form action="Account/Logout" method="post" class="m-0">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="ReturnUrl" value="" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Logout</button>
+                        </form>
+                    </Authorized>
+                    <NotAuthorized>
+                        <a href="Account/Login" class="btn btn-sm btn-primary">Login</a>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
         </div>
 
-        <article class="content px-4">
+        <article class="content px-4 py-4">
             @Body
         </article>
     </main>

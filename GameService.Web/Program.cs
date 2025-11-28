@@ -15,6 +15,10 @@ builder.AddRedisOutputCache("cache");
 builder.AddRedisClient("cache");
 
 builder.Services.AddSingleton<PlayerUpdateNotifier>();
+builder.Services.AddHttpClient<GameAdminService>(client => 
+{
+    client.BaseAddress = new("http://apiservice");
+});
 builder.Services.AddHostedService<RedisLogStreamer>();
 
 builder.AddNpgsqlDbContext<GameDbContext>("postgresdb", settings => 

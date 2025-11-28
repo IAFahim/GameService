@@ -81,12 +81,12 @@ public class LudoEngine(IDiceRoller roller)
         if ((State.ActiveSeats & 1) == 0) State.AdvanceTurnPointer();
     }
 
-    public bool TryRollDice(out RollResult result)
+    public bool TryRollDice(out RollResult result, byte? forcedDice = null)
     {
         if (State.Winner != 255) { result = new(LudoStatus.ErrorGameEnded, 0); return false; }
         if (State.LastDiceRoll != 0) { result = new(LudoStatus.ErrorNeedToRoll, State.LastDiceRoll); return false; }
 
-        byte dice = roller.Roll();
+        byte dice = forcedDice ?? roller.Roll();
         State.LastDiceRoll = dice;
 
         if (dice == 6) {

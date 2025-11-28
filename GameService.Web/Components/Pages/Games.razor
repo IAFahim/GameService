@@ -1,0 +1,92 @@
+@page "/games"
+@attribute [Authorize]
+@inject GameAdminService AdminService
+@inject NavigationManager Nav
+
+<PageTitle>Active Games</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Active Games</h1>
+    <button class="btn btn-outline-primary" @onclick="LoadGames">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+</div>
+
+@if (games == null)
+{
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+}
+else if (games.Count == 0)
+{
+    <div class="alert alert-info">
+        No active games found.
+    </div>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        @foreach (var game in games)
+        {
+            <div class="col">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="badge bg-secondary">@game.RoomId</span>
+                        <span class="badge @(game.Meta.IsPublic ? "bg-success" : "bg-warning")">
+                            @(game.Meta.IsPublic ? "Public" : "Private")
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">Players: @game.Meta.PlayerSeats.Count / 2</h5>
+                        <ul class="list-group list-group-flush mb-3">
+                            @foreach (var player in game.Meta.PlayerSeats)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span class="text-truncate" style="max-width: 150px;">@player.Key</span>
+                                    <span class="badge bg-light text-dark">Seat @player.Value</span>
+                                </li>
+                            }
+                        </ul>
+                        <div class="d-grid gap-2">
+                            <a href="games/@game.RoomId" class="btn btn-primary">
+                                <i class="bi bi-eye"></i> Inspect & Control
+                            </a>
+                            <button class="btn btn-danger" @onclick="() => DeleteGame(game.RoomId)">
+                                <i class="bi bi-trash"></i> Terminate
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-footer text-muted small">
+                        Turn: Seat @game.Engine.State.CurrentPlayer
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<LudoContext>? games;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGames();
+    }
+
+    private async Task LoadGames()
+    {
+        games = await AdminService.GetActiveGamesAsync();
+    }
+
+    private async Task DeleteGame(string roomId)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to terminate game {roomId}?"))
+            return;
+
+        await AdminService.DeleteGameAsync(roomId);
+        await LoadGames();
+    }
+    
+    [Inject] IJSRuntime JSRuntime { get; set; } = default!;
+}

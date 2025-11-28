@@ -9,6 +9,7 @@ public class LudoRoomService(IConnectionMultiplexer redis)
     
     private string GetMetaKey(string roomId) => $"ludo:{roomId}:meta";
     private string GetStateKey(string roomId) => $"ludo:{roomId}:state";
+    private const string ActiveRoomsKey = "ludo:active_rooms";
     
     public async Task<string?> CreateRoomAsync(string hostUserId)
     {
@@ -25,8 +26,30 @@ public class LudoRoomService(IConnectionMultiplexer redis)
             IsPublic = true 
         };
         await _db.StringSetAsync(GetMetaKey(roomId), JsonSerializer.Serialize(meta));
+        await _db.SetAddAsync(ActiveRoomsKey, roomId);
         
         return roomId;
+    }
+
+    public async Task<List<LudoContext>> GetActiveGamesAsync()
+    {
+        var roomIds = await _db.SetMembersAsync(ActiveRoomsKey);
+        var games = new List<LudoContext>();
+        
+        foreach (var id in roomIds)
+        {
+            var ctx = await LoadGameAsync(id.ToString());
+            if (ctx != null) games.Add(ctx);
+            else await _db.SetRemoveAsync(ActiveRoomsKey, id); // Cleanup stale
+        }
+        
+        return games;
+    }
+
+    public async Task DeleteRoomAsync(string roomId)
+    {
+        await _db.KeyDeleteAsync([GetMetaKey(roomId), GetStateKey(roomId)]);
+        await _db.SetRemoveAsync(ActiveRoomsKey, roomId);
     }
     
     public async Task<bool> JoinRoomAsync(string roomId, string userId)

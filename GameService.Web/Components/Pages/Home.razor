@@ -51,8 +51,7 @@ else
                     <td class="text-end">
                         <button class="btn btn-danger btn-sm" 
                                 @onclick="() => DeleteUser(user.ProfileId)"
-                                disabled="@isMe"
-                                title="@(isMe ? "You cannot remove yourself" : "Delete User")"
+                                title="Delete User"
                                 data-testid="delete-user-@user.UserId">
                             Delete
                         </button>
@@ -145,14 +144,19 @@ else
         
         if (profile is not null)
         {
-            if (profile.UserId == currentUserId) return;
-
             db.Users.Remove(profile.User);
             await db.SaveChangesAsync();
             
             await LoadUsers();
+            
+            if (profile.UserId == currentUserId)
+            {
+                Nav.NavigateTo("Account/Login", true);
+            }
         }
     }
+
+    [Inject] NavigationManager Nav { get; set; } = default!;
 
     public void Dispose()
     {

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using GameService.Ludo;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -11,6 +12,7 @@ public static class AdminEndpoints
         var group = app.MapGroup("/admin/games"); //.RequireAuthorization("AdminPolicy"); // TODO: Add Admin Policy
 
         group.MapGet("/", GetGames);
+        group.MapPost("/", CreateGame);
         group.MapPost("/{roomId}/roll", ForceRoll);
         group.MapDelete("/{roomId}", DeleteGame);
     }
@@ -19,6 +21,18 @@ public static class AdminEndpoints
     {
         var games = await service.GetActiveGamesAsync();
         return Results.Ok(games);
+    }
+
+    private static async Task<IResult> CreateGame(
+        LudoRoomService service, 
+        ClaimsPrincipal user,
+        IHubContext<LudoHub> hub)
+    {
+        var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+        var roomId = await service.CreateRoomAsync(userId);
+        return Results.Ok(new { RoomId = roomId });
     }
 
     private static async Task<IResult> ForceRoll(

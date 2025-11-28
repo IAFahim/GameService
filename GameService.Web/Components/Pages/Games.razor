@@ -7,9 +7,14 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>Active Games</h1>
-    <button class="btn btn-outline-primary" @onclick="LoadGames">
-        <i class="bi bi-arrow-clockwise"></i> Refresh
-    </button>
+    <div>
+        <button class="btn btn-success me-2" @onclick="CreateGame">
+            <i class="bi bi-plus-lg"></i> Create Game
+        </button>
+        <button class="btn btn-outline-primary" @onclick="LoadGames">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
 </div>
 
 @if (games == null)
@@ -77,6 +82,19 @@ else
     private async Task LoadGames()
     {
         games = await AdminService.GetActiveGamesAsync();
+    }
+
+    private async Task CreateGame()
+    {
+        try
+        {
+            await AdminService.CreateGameAsync();
+            await LoadGames();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Failed to create game: " + ex.Message);
+        }
     }
 
     private async Task DeleteGame(string roomId)

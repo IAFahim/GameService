@@ -1,4 +1,5 @@
 using GameService.Ludo;
+using GameService.ServiceDefaults.DTOs;
 using System.Net.Http.Json;
 
 namespace GameService.Web.Services;
@@ -25,6 +26,23 @@ public class GameAdminService(HttpClient http)
     public async Task DeleteGameAsync(string roomId)
     {
         var response = await http.DeleteAsync($"/admin/games/{roomId}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<AdminPlayerDto>> GetPlayersAsync()
+    {
+        return await http.GetFromJsonAsync<List<AdminPlayerDto>>("/admin/players") ?? [];
+    }
+
+    public async Task UpdatePlayerCoinsAsync(string userId, long amount)
+    {
+        var response = await http.PostAsJsonAsync($"/admin/players/{userId}/coins", new UpdateCoinRequest(amount));
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeletePlayerAsync(string userId)
+    {
+        var response = await http.DeleteAsync($"/admin/players/{userId}");
         response.EnsureSuccessStatusCode();
     }
 }

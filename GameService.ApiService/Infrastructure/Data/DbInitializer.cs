@@ -10,8 +10,14 @@ public static class DbInitializer
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GameDbContext>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
         await db.Database.EnsureCreatedAsync();
+
+        if (!await roleManager.RoleExistsAsync("Admin"))
+        {
+            await roleManager.CreateAsync(new IdentityRole("Admin"));
+        }
 
         const string adminEmail = "admin@gameservice.com";
         if (await userManager.FindByEmailAsync(adminEmail) is null)
@@ -20,6 +26,7 @@ public static class DbInitializer
             var result = await userManager.CreateAsync(admin, "AdminPass123!");
             if (result.Succeeded)
             {
+                await userManager.AddToRoleAsync(admin, "Admin");
                 db.PlayerProfiles.Add(new PlayerProfile { UserId = admin.Id, Coins = 1_000_000 });
                 await db.SaveChangesAsync();
             }

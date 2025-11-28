@@ -16,10 +16,16 @@ public static class LudoConstants
     public const int QuadrantSize = 13;
 }
 
-[StructLayout(LayoutKind.Explicit, Size = 28)]
-public unsafe struct LudoState
+[System.Runtime.CompilerServices.InlineArray(16)]
+public struct TokenBuffer
 {
-    [FieldOffset(0)] public fixed byte Tokens[16];
+    private byte _element0;
+}
+
+[StructLayout(LayoutKind.Explicit, Size = 28)]
+public struct LudoState
+{
+    [FieldOffset(0)] public TokenBuffer Tokens;
     [FieldOffset(16)] public byte CurrentPlayer;
     [FieldOffset(17)] public byte LastDiceRoll;
     [FieldOffset(18)] public byte ConsecutiveSixes;
@@ -71,7 +77,9 @@ public class LudoEngine(IDiceRoller roller)
 
     public void InitNewGame(int playerCount)
     {
-        unsafe { fixed (byte* ptr = State.Tokens) { *(long*)ptr = 0; *(long*)(ptr + 8) = 0; } }
+        // Clear tokens
+        for (int i = 0; i < 16; i++) State.Tokens[i] = 0;
+        
         State.CurrentPlayer = 0;
         State.LastDiceRoll = 0;
         State.Winner = 255;

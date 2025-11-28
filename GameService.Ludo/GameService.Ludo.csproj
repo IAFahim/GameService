@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Razor">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -6,13 +6,11 @@
         <Nullable>enable</Nullable>
         <IsAspireSharedProject>true</IsAspireSharedProject>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
     </PropertyGroup>
 
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App"/>
 
-        <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
         <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0"/>
         <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="10.0.0"/>
         <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.13.1"/>

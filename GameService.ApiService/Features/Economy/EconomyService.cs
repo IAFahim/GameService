@@ -43,12 +43,23 @@ public class EconomyService(GameDbContext db, IGameEventPublisher publisher) : I
                     db.PlayerProfiles.Add(profile);
                 }
 
-                if (amount < 0 && (profile.Coins + amount < 0))
+                try
                 {
-                    return new TransactionResult(false, profile.Coins, TransactionErrorType.InsufficientFunds, "Insufficient funds");
+                    checked
+                    {
+                        if (amount < 0 && (profile.Coins + amount < 0))
+                        {
+                            return new TransactionResult(false, profile.Coins, TransactionErrorType.InsufficientFunds, "Insufficient funds");
+                        }
+
+                        profile.Coins += amount;
+                    }
+                }
+                catch (OverflowException)
+                {
+                    return new TransactionResult(false, profile.Coins, TransactionErrorType.InvalidAmount, "Transaction would cause balance overflow/underflow");
                 }
 
-                profile.Coins += amount;
                 profile.Version = Guid.NewGuid();
 
                 await db.SaveChangesAsync();

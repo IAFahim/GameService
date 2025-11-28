@@ -9,6 +9,8 @@ namespace GameService.ApiService;
 [JsonSerializable(typeof(UpdateCoinRequest))]
 [JsonSerializable(typeof(PlayerProfileResponse))]
 [JsonSerializable(typeof(List<PlayerProfileResponse>))]
+[JsonSerializable(typeof(AdminPlayerDto))]
+[JsonSerializable(typeof(List<AdminPlayerDto>))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(HttpValidationProblemDetails))]
 [JsonSerializable(typeof(AccessTokenResponse))]

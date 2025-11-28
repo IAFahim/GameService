@@ -25,6 +25,7 @@
     <ProjectReference Include="..\GameService.ApiService\GameService.ApiService.csproj" />
     <ProjectReference Include="..\GameService.Web\GameService.Web.csproj" />
     <ProjectReference Include="..\GameService.ServiceDefaults\GameService.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\GameService.Ludo\GameService.Ludo.csproj" />
   </ItemGroup>
 
 </Project>

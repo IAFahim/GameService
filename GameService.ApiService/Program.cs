@@ -22,6 +22,7 @@ builder.AddRedisClient("cache");
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, GameJsonContext.Default);
+    options.SerializerOptions.TypeInfoResolverChain.Insert(1, LudoJsonContext.Default);
 });
 
 builder.Services.AddCors(options =>
@@ -48,8 +49,12 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminPolicy", policy => policy.RequireRole("Admin"));
+});
 builder.Services.AddIdentityApiEndpoints<ApplicationUser>()
+    .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<GameDbContext>();
 
 builder.Services.AddScoped<IPasswordHasher<ApplicationUser>, Argon2PasswordHasher>();
@@ -58,6 +63,7 @@ builder.Services.AddScoped<IGameEventPublisher, RedisGameEventPublisher>();
 builder.Services.AddScoped<IPlayerService, PlayerService>();
 builder.Services.AddScoped<IEconomyService, EconomyService>();
 
+builder.Services.AddSingleton<ILudoRepository, RedisLudoRepository>();
 builder.Services.AddSingleton<LudoRoomService>();
 
 builder.Services.AddSignalR()
@@ -75,6 +81,17 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 app.UseHttpsRedirection();
 app.UseCors();
 app.UseRateLimiter();
+
+app.Use(async (context, next) =>
+{
+    if (context.Request.Headers.TryGetValue("X-Admin-Key", out var key) && key == "SecretAdminKey123!")
+    {
+        var claims = new[] { new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Admin") };
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "ApiKey");
+        context.User = new System.Security.Claims.ClaimsPrincipal(identity);
+    }
+    await next();
+});
 
 app.MapAuthEndpoints();
 app.MapPlayerEndpoints();

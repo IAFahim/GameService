@@ -1,8 +1,5 @@
 ﻿@page "/"
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Identity
-@using Microsoft.EntityFrameworkCore
-@using GameService.ServiceDefaults.Data
 @using GameService.ServiceDefaults.DTOs
 @using System.Security.Claims
 @using GameService.Web.Services
@@ -11,8 +8,7 @@
 @rendermode InteractiveServer
 @implements IDisposable
 
-@inject IDbContextFactory<GameDbContext> DbFactory
-@inject UserManager<ApplicationUser> UserManager
+@inject GameAdminService AdminService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject PlayerUpdateNotifier Notifier
 
@@ -55,7 +51,7 @@ else
                     </td>
                     <td class="text-end">
                         <button class="btn btn-danger btn-sm" 
-                                @onclick="() => DeleteUser(user.ProfileId)"
+                                @onclick="() => DeleteUser(user.UserId)"
                                 disabled="@isMe"
                                 title="@(isMe ? "You cannot remove yourself" : "Delete User")"
                                 data-testid="delete-user-@user.UserId">
@@ -94,11 +90,11 @@ else
 }
 
 @code {
-    private List<UserViewModel>? users;
+    private List<AdminPlayerDto>? users;
     private string? currentUserId;
     private readonly HashSet<string> updatedUserIds = new();
     
-    private UserViewModel? editingUser;
+    private AdminPlayerDto? editingUser;
     private long coinAmount;
 
     protected override async Task OnInitializedAsync()
@@ -125,7 +121,7 @@ else
             }
             else if (!string.IsNullOrEmpty(msg.Username))
             {
-                users.Insert(0, new UserViewModel(
+                users.Insert(0, new AdminPlayerDto(
                     0, msg.UserId,
                     msg.Username,
                     msg.Email ?? "Unknown",
@@ -144,7 +140,7 @@ else
         });
     }
 
-    private void EditCoins(UserViewModel user)
+    private void EditCoins(AdminPlayerDto user)
     {
         editingUser = user;
         coinAmount = 0;
@@ -159,22 +155,14 @@ else
     {
         if (editingUser == null || coinAmount == 0) return;
 
-        // We need an endpoint for admin to update coins without transaction limits?
-        // Or just use the transaction endpoint but impersonating?
-        // For now, let's use the EconomyService directly via a new Admin endpoint or just direct DB access since this is server-side Blazor.
-        // Direct DB access is easiest for this "God Mode" feature.
-        
-        using var db = await DbFactory.CreateDbContextAsync();
-        var profile = await db.PlayerProfiles.FirstOrDefaultAsync(p => p.UserId == editingUser.UserId);
-        if (profile != null)
+        try 
         {
-            profile.Coins += coinAmount;
-            await db.SaveChangesAsync();
-            
-            // Notify updates
-            var user = await db.Users.FindAsync(editingUser.UserId);
-            var message = new PlayerUpdatedMessage(editingUser.UserId, profile.Coins, user?.UserName, user?.Email);
-            Notifier.Notify(message);
+            await AdminService.UpdatePlayerCoinsAsync(editingUser.UserId, coinAmount);
+        }
+        catch (Exception ex)
+        {
+            // In a real app, show error toast
+            Console.WriteLine($"Error updating coins: {ex.Message}");
         }
 
         CloseEdit();
@@ -183,43 +171,21 @@ else
 
     private async Task LoadUsers()
     {
-        using var db = await DbFactory.CreateDbContextAsync();
-        
-        users = await db.PlayerProfiles
-            .AsNoTracking()
-            .Include(p => p.User)
-            .OrderBy(p => p.Id)
-            .Select(p => new UserViewModel(
-                p.Id,
-                p.UserId,
-                p.User.UserName ?? "Unknown",
-                p.User.Email ?? "No Email",
-                p.Coins
-            ))
-            .ToListAsync();
+        users = await AdminService.GetPlayersAsync();
     }
 
-    private async Task DeleteUser(int profileId)
+    private async Task DeleteUser(string userId)
     {
-        if (profileId == 0) 
+        if (string.IsNullOrEmpty(userId) || userId == currentUserId) return;
+
+        try
         {
+            await AdminService.DeletePlayerAsync(userId);
             await LoadUsers();
-            return; 
         }
-
-        using var db = await DbFactory.CreateDbContextAsync();
-        var profile = await db.PlayerProfiles
-            .Include(p => p.User)
-            .FirstOrDefaultAsync(p => p.Id == profileId);
-        
-        if (profile is not null)
+        catch (Exception ex)
         {
-            if (profile.UserId == currentUserId) return;
-
-            db.Users.Remove(profile.User);
-            await db.SaveChangesAsync();
-            
-            await LoadUsers();
+            Console.WriteLine($"Error deleting user: {ex.Message}");
         }
     }
 
@@ -229,6 +195,4 @@ else
     {
         Notifier.OnPlayerUpdated -= HandleUpdate;
     }
-
-    public record UserViewModel(int ProfileId, string UserId, string Username, string Email, long Coins);
 }

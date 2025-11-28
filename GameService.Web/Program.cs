@@ -18,6 +18,7 @@ builder.Services.AddSingleton<PlayerUpdateNotifier>();
 builder.Services.AddHttpClient<GameAdminService>(client => 
 {
     client.BaseAddress = new("http://apiservice");
+    client.DefaultRequestHeaders.Add("X-Admin-Key", "SecretAdminKey123!");
 });
 builder.Services.AddHostedService<RedisLogStreamer>();
 

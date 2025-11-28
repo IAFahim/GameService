@@ -78,6 +78,12 @@ public class LudoHub(LudoRoomService roomService) : Hub
             }
         }
     }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        // In a real app, we would track connectionId -> roomId to notify "PlayerLeft"
+        await base.OnDisconnectedAsync(exception);
+    }
     
 
     private byte[] SerializeState(LudoState state)

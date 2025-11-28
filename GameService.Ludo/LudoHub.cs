@@ -9,11 +9,14 @@ public class LudoHub(LudoRoomService roomService) : Hub
 {
     private string UserId => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
 
-    public async Task<string> CreateGame()
+    // GameService.Ludo/LudoHub.cs
+    public async Task CreateGame()
     {
         var roomId = await roomService.CreateRoomAsync(UserId);
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
-        return roomId;
+    
+        // IMPORTANT: Send the ID back!
+        await Clients.Caller.SendAsync("RoomCreated", roomId);
     }
 
     public async Task<bool> JoinGame(string roomId)
@@ -86,6 +89,7 @@ public class LudoHub(LudoRoomService roomService) : Hub
             }
         }
     }
+    
 
     private byte[] SerializeState(LudoState state)
     {

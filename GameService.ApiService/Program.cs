@@ -7,11 +7,10 @@ using GameService.ApiService.Infrastructure.Data;
 using GameService.ServiceDefaults.Security;
 using GameService.ServiceDefaults.Data;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
 using GameService.ApiService.Features.Common;
-using GameService.Ludo;
+using GameService.Ludo; // Contains LudoHub and LudoRoomService
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,10 +60,7 @@ builder.Services.AddScoped<IGameEventPublisher, RedisGameEventPublisher>();
 builder.Services.AddScoped<IPlayerService, PlayerService>();
 builder.Services.AddScoped<IEconomyService, EconomyService>();
 
-// Real-time: SignalR
-builder.Services.AddSignalR()
-    .AddStackExchangeRedis(builder.Configuration.GetConnectionString("cache") ?? throw new InvalidOperationException("Redis connection string is missing"));
-
+// Ludo Services
 builder.Services.AddScoped<LudoRoomService>();
 
 // Real-time: SignalR
@@ -93,7 +89,8 @@ app.MapEconomyEndpoints();
 
 // Map Hubs
 app.MapHub<GameHub>("/hubs/game");
-app.MapHub<GameHub>("/hubs/ludo");
+// FIX: Map the correct LudoHub here
+app.MapHub<LudoHub>("/hubs/ludo"); 
 
 app.MapDefaultEndpoints();
 app.Run();

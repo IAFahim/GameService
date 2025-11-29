@@ -10,24 +10,29 @@ public class LudoRoomService(ILudoRepository repository) : IGameRoomService
     {
         string roomId = Guid.NewGuid().ToString("N")[..8];
 
-        var engine = new LudoEngine(new ServerDiceRoller()); ;
+        var engine = new LudoEngine(new ServerDiceRoller());
+        engine.InitNewGame(playerCount);
+
+        // DEBUG: Ensure Winner is 255 (Not 0)
+        if (engine.State.Winner == 0) engine.State.Winner = 255;
 
         var meta = new LudoRoomMeta { 
             PlayerSeats = new(),
             IsPublic = true,
-            MaxPlayers = playerCount // Add this to LudoRoomMeta below
+            MaxPlayers = playerCount
         };
 
-        // If a host exists (User created), add them. If null (Admin created), empty room.
         if (!string.IsNullOrEmpty(hostUserId))
         {
-            meta.PlayerSeats.Add(hostUserId, 0); // Seat 0
+            meta.PlayerSeats.Add(hostUserId, 0);
         }
 
+        // IMPORTANT: Pass engine.State (which is a Value Type copy) explicitly
         var context = new LudoContext(roomId, engine.State, meta);
+    
         await repository.SaveGameAsync(context);
         await repository.AddActiveGameAsync(roomId);
-        
+    
         return roomId;
     }
 
@@ -45,7 +50,31 @@ public class LudoRoomService(ILudoRepository repository) : IGameRoomService
 
     public async Task<object?> GetGameStateAsync(string roomId)
     {
-        return await repository.LoadGameAsync(roomId);
+        var ctx = await repository.LoadGameAsync(roomId);
+        if (ctx == null) return null;
+
+        // FIX: Manually map the struct fields to an anonymous object
+        // so System.Text.Json can read them.
+        var s = ctx.State;
+    
+        // Convert token buffer to array
+        var tokenArray = new byte[16];
+        for(int i=0; i<16; i++) tokenArray[i] = s.Tokens[i];
+
+        return new 
+        {
+            ctx.RoomId,
+            ctx.Meta,
+            State = new 
+            {
+                CurrentPlayer = s.CurrentPlayer,
+                LastDiceRoll = s.LastDiceRoll,
+                TurnId = s.TurnId,
+                Winner = s.Winner == 255 ? -1 : (int)s.Winner,
+                ActiveSeatsBinary = Convert.ToString(s.ActiveSeats, 2).PadLeft(4, '0'),
+                Tokens = tokenArray
+            }
+        };
     }
 
     public async Task DeleteRoomAsync(string roomId)

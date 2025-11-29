@@ -9,12 +9,13 @@ public class LudoHub(LudoRoomService roomService) : Hub
 {
     private string UserId => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
 
-    public async Task CreateGame()
+    public async Task<string> CreateGame()
     {
         var roomId = await roomService.CreateRoomAsync(UserId);
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
 
         await Clients.Caller.SendAsync("RoomCreated", roomId);
+        return roomId;
     }
 
     public async Task<bool> JoinGame(string roomId)
@@ -36,15 +37,16 @@ public class LudoHub(LudoRoomService roomService) : Hub
     public async Task RollDice(string roomId)
     {
         var ctx = await roomService.LoadGameAsync(roomId);
-        if (ctx == null) return;
+        if (ctx == null) { await Clients.Caller.SendAsync("Error", "Room not found"); return; }
 
-        if (!ctx.Meta.PlayerSeats.TryGetValue(UserId, out int mySeat)) return;
+        if (!ctx.Meta.PlayerSeats.TryGetValue(UserId, out int mySeat)) { await Clients.Caller.SendAsync("Error", "You are not in this room"); return; }
 
         var engine = new LudoEngine(ctx.State, new ServerDiceRoller());
-        
+    
+        // Check turn
         if (engine.State.CurrentPlayer != mySeat) 
         {
-            await Clients.Caller.SendAsync("Error", "Not your turn");
+            await Clients.Caller.SendAsync("Error", $"Not your turn! Waiting for Seat {engine.State.CurrentPlayer}");
             return;
         }
 
@@ -52,13 +54,16 @@ public class LudoHub(LudoRoomService roomService) : Hub
         {
             var newCtx = ctx with { State = engine.State };
             await roomService.SaveGameAsync(newCtx);
-
             await Clients.Group(roomId).SendAsync("RollResult", result.DiceValue);
-
+        
+            // Send state update if turn passed (e.g. rolled a 1, 2, 3...)
             if (result.Status == LudoStatus.TurnPassed || result.Status == LudoStatus.ForfeitTurn)
-            {
                 await Clients.Group(roomId).SendAsync("GameState", SerializeState(engine.State));
-            }
+        }
+        else
+        {
+            // FIX: Tell client WHY it failed
+            await Clients.Caller.SendAsync("Error", $"Roll Rejected: {result.Status} (Did you already roll?)");
         }
     }
 
@@ -84,6 +89,10 @@ public class LudoHub(LudoRoomService roomService) : Hub
             {
                 await Clients.Group(roomId).SendAsync("GameWon", UserId);
             }
+        }
+        else
+        {
+            await Clients.Caller.SendAsync("Error", $"Move Rejected: {result.Status}");
         }
     }
 

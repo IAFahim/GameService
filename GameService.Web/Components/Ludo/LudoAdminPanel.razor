@@ -7,6 +7,14 @@
 <div class="row">
     <!-- Visualization Column -->
     <div class="col-md-8">
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @errorMessage
+                <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+            </div>
+        }
+        
         <div class="row g-3">
             @for (int p = 0; p < 4; p++)
             {
@@ -50,6 +58,7 @@
                 <button class="btn btn-warning w-100 mb-3" 
                         @onclick="DoForceRoll" 
                         disabled="@(isBusy || State.LastDiceRoll != 0)">
+                    @if (isBusy) { <span class="spinner-border spinner-border-sm me-1"></span> }
                     Force Roll
                 </button>
                 
@@ -69,7 +78,10 @@
                 </div>
                 
                 <hr />
-                <button class="btn btn-secondary w-100" @onclick="OnRefresh">Refresh State</button>
+                <button class="btn btn-secondary w-100" @onclick="DoRefresh" disabled="@isBusy">
+                    @if (isBusy) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Refresh State
+                </button>
             </div>
         </div>
     </div>
@@ -81,6 +93,7 @@
     [Parameter] public EventCallback OnRefresh { get; set; }
     
     private bool isBusy = false;
+    private string? errorMessage;
 
     private int GetTokenPos(int player, int tokenIdx) 
     {
@@ -117,30 +130,73 @@
     private async Task DoForceRoll()
     {
         isBusy = true;
+        errorMessage = null;
+        StateHasChanged();
+        
         try 
         {
             await AdminService.PlayLudoRollAsync(RoomId);
             await OnRefresh.InvokeAsync();
         }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"API Error: {ex.Message}";
+        }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error: {ex.Message}");
+            errorMessage = $"Error: {ex.Message}";
         }
-        finally { isBusy = false; }
+        finally 
+        { 
+            isBusy = false; 
+            StateHasChanged();
+        }
     }
 
     private async Task DoForceMove(int tokenIndex)
     {
         isBusy = true;
+        errorMessage = null;
+        StateHasChanged();
+        
         try 
         {
             await AdminService.PlayLudoMoveAsync(RoomId, tokenIndex);
             await OnRefresh.InvokeAsync();
         }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"API Error: {ex.Message}";
+        }
         catch (Exception ex)
         {
-             Console.WriteLine($"Error: {ex.Message}");
+            errorMessage = $"Error: {ex.Message}";
         }
-        finally { isBusy = false; }
+        finally 
+        { 
+            isBusy = false; 
+            StateHasChanged();
+        }
+    }
+    
+    private async Task DoRefresh()
+    {
+        isBusy = true;
+        errorMessage = null;
+        StateHasChanged();
+        
+        try
+        {
+            await OnRefresh.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isBusy = false;
+            StateHasChanged();
+        }
     }
 }

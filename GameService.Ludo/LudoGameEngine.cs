@@ -111,12 +111,22 @@ public sealed class LudoGameEngine : IGameEngine
         if (ctx == null)
             return GameActionResult.Error("Room not found");
 
-        // Validate player turn
-        if (!ctx.Meta.PlayerSeats.TryGetValue(userId, out var seatIndex))
-            return GameActionResult.Error("Player not in room");
+        int seatIndex;
+        
+        // Admin bypass - use current player's seat
+        if (userId == "ADMIN")
+        {
+            seatIndex = ctx.State.CurrentPlayer;
+        }
+        else
+        {
+            // Validate player turn
+            if (!ctx.Meta.PlayerSeats.TryGetValue(userId, out seatIndex))
+                return GameActionResult.Error("Player not in room");
 
-        if (ctx.State.CurrentPlayer != seatIndex)
-            return GameActionResult.Error($"Not your turn. Waiting for seat {ctx.State.CurrentPlayer}");
+            if (ctx.State.CurrentPlayer != seatIndex)
+                return GameActionResult.Error($"Not your turn. Waiting for seat {ctx.State.CurrentPlayer}");
+        }
 
         var engine = new LudoEngine(ctx.State, _diceRoller);
 
@@ -156,11 +166,21 @@ public sealed class LudoGameEngine : IGameEngine
         if (ctx == null)
             return GameActionResult.Error("Room not found");
 
-        if (!ctx.Meta.PlayerSeats.TryGetValue(userId, out var seatIndex))
-            return GameActionResult.Error("Player not in room");
+        int seatIndex;
+        
+        // Admin bypass - use current player's seat
+        if (userId == "ADMIN")
+        {
+            seatIndex = ctx.State.CurrentPlayer;
+        }
+        else
+        {
+            if (!ctx.Meta.PlayerSeats.TryGetValue(userId, out seatIndex))
+                return GameActionResult.Error("Player not in room");
 
-        if (ctx.State.CurrentPlayer != seatIndex)
-            return GameActionResult.Error("Not your turn");
+            if (ctx.State.CurrentPlayer != seatIndex)
+                return GameActionResult.Error("Not your turn");
+        }
 
         var engine = new LudoEngine(ctx.State, _diceRoller);
 

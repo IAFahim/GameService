@@ -6,7 +6,6 @@ using GameService.Web.Components;
 using GameService.Web.Workers;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,16 +23,13 @@ builder.Services.AddHttpClient<GameAdminService>((sp, client) =>
 });
 builder.Services.AddHostedService<RedisLogStreamer>();
 
-builder.AddNpgsqlDbContext<GameDbContext>("postgresdb", settings => 
-{
-}, configureDbContextOptions: options => 
+builder.AddNpgsqlDbContext<GameDbContext>("postgresdb", configureDbContextOptions: options => 
 {
     if (builder.Environment.IsDevelopment()) 
         options.EnableSensitiveDataLogging();
 });
 
-builder.Services.AddDbContextFactory<GameDbContext>(options => { });
-
+// Authentication & Authorization
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityUserAccessor>();
 builder.Services.AddScoped<IdentityRedirectManager>();
@@ -46,10 +42,15 @@ builder.Services.AddAuthentication(options =>
     })
     .AddIdentityCookies();
 
+builder.Services.AddAuthorization();
+
 builder.Services.AddIdentityCore<ApplicationUser>(options => 
     {
-        options.SignIn.RequireConfirmedAccount = true;
+        options.SignIn.RequireConfirmedAccount = false;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Password.RequiredLength = 6;
     })
+    .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<GameDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
@@ -61,19 +62,24 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+if (!app.Environment.IsDevelopment())
 {
-    using (var scope = app.Services.CreateScope())
-    {
-        var db = scope.ServiceProvider.GetRequiredService<GameDbContext>();
-        await db.Database.EnsureCreatedAsync();
-    }
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
+else
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<GameDbContext>();
+    await db.Database.EnsureCreatedAsync();
+}
 
+app.UseStaticFiles();
 app.UseAntiforgery();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseOutputCache();
+
 app.MapStaticAssets();
 
 app.MapRazorComponents<App>()

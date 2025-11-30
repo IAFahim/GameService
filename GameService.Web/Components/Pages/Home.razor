@@ -15,81 +15,145 @@
 
 <PageTitle>Player Management</PageTitle>
 
-<h1>Player Management <span class="badge bg-success small align-middle">Live</span></h1>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0">Player Management</h1>
+        <p class="text-muted small mb-0">Real-time player registry and economy control</p>
+    </div>
+    <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill">
+        <i class="bi bi-broadcast me-1"></i> Live Stream Connected
+    </span>
+</div>
 
 @if (users == null)
 {
-    <p><em>Loading users...</em></p>
+    <div class="d-flex justify-content-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table table-striped table-hover align-middle">
-            <thead class="table-dark">
-            <tr>
-                <th>Profile ID</th>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Coins</th>
-                <th class="text-end">Actions</th>
-            </tr>
-            </thead>
-            <tbody>
-            @foreach (var user in users)
-            {
-                var isMe = user.UserId == currentUserId;
-                var rowClass = isMe ? "table-info" : (updatedUserIds.Contains(user.UserId) ? "table-warning" : "");
-                
-                <tr class="@rowClass" @key="user.UserId" data-testid="user-row-@user.UserId">
-                    <td>@user.ProfileId</td>
-                    <td>@user.Username @(isMe ? "(You)" : "")</td>
-                    <td>@user.Email</td>
-                    <td>
-                        @user.Coins.ToString("N0")
-                        <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="() => EditCoins(user)">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                    </td>
-                    <td class="text-end">
-                        <button class="btn btn-danger btn-sm" 
-                                @onclick="() => DeleteUser(user.UserId)"
-                                disabled="@isMe"
-                                title="@(isMe ? "You cannot remove yourself" : "Delete User")"
-                                data-testid="delete-user-@user.UserId">
-                            Delete
-                        </button>
-                    </td>
+    <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th class="ps-4 text-secondary text-uppercase small" style="width: 80px;">ID</th>
+                    <th class="text-secondary text-uppercase small">User</th>
+                    <th class="text-secondary text-uppercase small">Balance</th>
+                    <th class="text-end pe-4 text-secondary text-uppercase small">Actions</th>
                 </tr>
-            }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                @foreach (var user in users)
+                {
+                    var isMe = user.UserId == currentUserId;
+                    var rowClass = isMe ? "table-info" : (updatedUserIds.Contains(user.UserId) ? "table-warning transition-fade" : "");
+                    
+                    <tr class="@rowClass" @key="user.UserId">
+                        <td class="ps-4 text-muted">#@user.ProfileId</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-circle bg-primary text-white me-3 d-flex align-items-center justify-content-center fw-bold" 
+                                     style="width: 32px; height: 32px; border-radius: 50%; font-size: 0.8rem;">
+                                    @user.Username.Substring(0, 1).ToUpper()
+                                </div>
+                                <div>
+                                    <div class="fw-medium">@user.Username @(isMe ? "(You)" : "")</div>
+                                    <div class="text-muted small">@user.Email</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <span class="fw-bold text-dark me-2">@user.Coins.ToString("N0")</span>
+                                <span class="badge bg-secondary-subtle text-secondary rounded-pill" style="font-size: 0.7em;">COINS</span>
+                            </div>
+                        </td>
+                        <td class="text-end pe-4">
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline-secondary border-0" 
+                                        title="Adjust Coins"
+                                        @onclick="() => EditCoins(user)">
+                                    <i class="bi bi-cash-coin fs-5"></i>
+                                </button>
+                                
+                                <div class="vr my-2 mx-1 text-secondary opacity-25"></div>
+
+                                <button class="btn btn-sm btn-outline-danger border-0" 
+                                        @onclick="() => ConfirmDelete(user)"
+                                        disabled="@isMe"
+                                        title="@(isMe ? "Cannot delete self" : "Delete Account")">
+                                    <i class="bi bi-trash fs-5"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
     </div>
 }
 
-<!-- Edit Modal Omitted for Brevity -->
+<!-- Edit Coins Modal -->
 @if (editingUser != null)
 {
-    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit Coins for @editingUser.Username</h5>
+    <div class="modal fade show d-block backdrop-blur" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title">Adjust Balance</h5>
                     <button type="button" class="btn-close" @onclick="CloseEdit"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Amount to Add (use negative to subtract)</label>
-                        <input type="number" class="form-control" @bind="coinAmount" />
+                    <div class="text-center mb-4">
+                        <div class="fw-bold fs-4">@editingUser.Username</div>
+                        <div class="text-muted">Current: @editingUser.Coins.ToString("N0")</div>
+                    </div>
+                    <div class="form-floating mb-3">
+                        <input type="number" class="form-control fs-3 fw-bold text-center" id="amountInput" @bind="coinAmount" />
+                        <label for="amountInput" class="text-center w-100">Adjustment Amount (+/-)</label>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="CloseEdit">Cancel</button>
-                    <button type="button" class="btn btn-primary" @onclick="SaveCoins">Save</button>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-light" @onclick="CloseEdit">Cancel</button>
+                    <button type="button" class="btn btn-primary px-4" @onclick="SaveCoins">Apply Transaction</button>
                 </div>
             </div>
         </div>
     </div>
 }
+
+<!-- Delete Confirmation Modal -->
+@if (deletingUser != null)
+{
+    <div class="modal fade show d-block backdrop-blur" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Confirm Deletion</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p>Are you sure you want to permanently delete user <strong>@deletingUser.Username</strong>?</p>
+                    <p class="mb-0 text-danger small">This action cannot be undone. All game progress and coins will be lost.</p>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-light" @onclick="CancelDelete">Keep User</button>
+                    <button type="button" class="btn btn-danger px-4" @onclick="ExecuteDelete">Yes, Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .backdrop-blur { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); }
+    .transition-fade { transition: background-color 1s ease-out; }
+</style>
 
 @code {
     private List<AdminPlayerDto>? users;
@@ -97,8 +161,11 @@ else
     private readonly HashSet<string> updatedUserIds = new();
     
     private AdminPlayerDto? editingUser;
+    private AdminPlayerDto? deletingUser;
     private long coinAmount;
     private bool _isDisposed;
+
+    [Inject] NavigationManager Nav { get; set; } = default!;
 
     protected override async Task OnInitializedAsync()
     {
@@ -106,7 +173,6 @@ else
         currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
         
         await LoadUsers();
-
         Notifier.OnPlayerUpdated += HandleUpdate;
     }
 
@@ -148,7 +214,8 @@ else
             updatedUserIds.Add(msg.UserId);
             StateHasChanged();
 
-            _ = Task.Delay(1000).ContinueWith(t => 
+            // Fade out the highlight
+            _ = Task.Delay(1000).ContinueWith(_ => 
             {
                 if (_isDisposed) return;
                 InvokeAsync(() => 
@@ -166,15 +233,11 @@ else
         coinAmount = 0;
     }
 
-    private void CloseEdit()
-    {
-        editingUser = null;
-    }
+    private void CloseEdit() => editingUser = null;
 
     private async Task SaveCoins()
     {
         if (editingUser == null || coinAmount == 0) return;
-
         try 
         {
             await AdminService.UpdatePlayerCoinsAsync(editingUser.UserId, coinAmount);
@@ -185,26 +248,30 @@ else
         }
         CloseEdit();
     }
+    
+    // New: Delete Confirmation Logic
+    private void ConfirmDelete(AdminPlayerDto user) => deletingUser = user;
+    
+    private void CancelDelete() => deletingUser = null;
 
-    private async Task LoadUsers()
+    private async Task ExecuteDelete()
     {
-        users = await AdminService.GetPlayersAsync();
-    }
-
-    private async Task DeleteUser(string userId)
-    {
-        if (string.IsNullOrEmpty(userId) || userId == currentUserId) return;
+        if (deletingUser == null) return;
         try
         {
-            await AdminService.DeletePlayerAsync(userId);
+            await AdminService.DeletePlayerAsync(deletingUser.UserId);
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error deleting user");
         }
+        finally
+        {
+            deletingUser = null;
+        }
     }
 
-    [Inject] NavigationManager Nav { get; set; } = default!;
+    private async Task LoadUsers() => users = await AdminService.GetPlayersAsync();
 
     public void Dispose()
     {

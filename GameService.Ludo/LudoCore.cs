@@ -190,9 +190,32 @@ public class LudoEngine(IDiceRoller roller)
         return true;
     }
 
-    private bool TryCapture(int myPid, byte myPos, out int vPid, out int vTid) {
-        vPid = -1; vTid = -1;
-        return false; 
+    private bool TryCapture(int myPid, byte myPos, out int vPid, out int vTid)
+    {
+        vPid = -1;
+        vTid = -1;
+
+        if (myPos == LudoConstants.PosBase || myPos == LudoConstants.PosHome)
+        {
+            return false;
+        }
+
+        for (int pid = 0; pid < LudoConstants.PlayerCount; pid++)
+        {
+            if (pid == myPid) continue;
+
+            for (int tid = 0; tid < 4; tid++)
+            {
+                if (State.GetTokenPos(pid, tid) == myPos)
+                {
+                    vPid = pid;
+                    vTid = tid;
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public List<int> GetLegalMoves()

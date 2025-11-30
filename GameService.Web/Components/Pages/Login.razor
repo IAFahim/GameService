@@ -15,35 +15,27 @@
 <div class="row">
     <div class="col-md-4">
         <section>
-            @if (Input != null)
-            {
-                <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
-                    <DataAnnotationsValidator />
-                    <h2>Use a local account to log in.</h2>
-                    <hr />
-                    <div class="text-danger">@errorMessage</div>
-                    
-                    <div class="form-floating mb-3">
-                        <InputText @bind-Value="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" data-testid="login-email" />
-                        <label for="email">Email</label>
-                        <ValidationMessage For="() => Input.Email" class="text-danger" />
-                    </div>
-                    <div class="form-floating mb-3">
-                        <InputText @bind-Value="Input.Password" type="password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" data-testid="login-password" />
-                        <label for="password">Password</label>
-                        <ValidationMessage For="() => Input.Password" class="text-danger" />
-                    </div>
-                    
-                    <div>
-                        <button type="submit" class="w-100 btn btn-lg btn-primary" data-testid="login-submit">Log in</button>
-                    </div>
-                    <div class="mt-3">
-                        <p>
-                             <button type="button" class="btn btn-link" @onclick="CreateTestUser">Create Test User (dev only)</button>
-                        </p>
-                    </div>
-                </EditForm>
-            }
+            <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
+                <DataAnnotationsValidator />
+                <h2>Use a local account to log in.</h2>
+                <hr />
+                <div class="text-danger">@errorMessage</div>
+                
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" data-testid="login-email" />
+                    <label for="email">Email</label>
+                    <ValidationMessage For="() => Input.Email" class="text-danger" />
+                </div>
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.Password" type="password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" data-testid="login-password" />
+                    <label for="password">Password</label>
+                    <ValidationMessage For="() => Input.Password" class="text-danger" />
+                </div>
+                
+                <div>
+                    <button type="submit" class="w-100 btn btn-lg btn-primary" data-testid="login-submit">Log in</button>
+                </div>
+            </EditForm>
         </section>
     </div>
 </div>
@@ -64,7 +56,7 @@
 
     public async Task LoginUser()
     {
-        if (Input == null) return;
+        if (Input is null) return;
         
         var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, false, lockoutOnFailure: false);
         if (result.Succeeded)
@@ -74,32 +66,6 @@
         else
         {
             errorMessage = "Invalid login attempt.";
-        }
-    }
-
-    private async Task CreateTestUser()
-    {
-        Input ??= new InputModel();
-        
-        var existingUser = await UserManager.FindByEmailAsync("test@example.com");
-        if (existingUser == null)
-        {
-            var user = new ApplicationUser { UserName = "test@example.com", Email = "test@example.com", EmailConfirmed = true };
-            var result = await UserManager.CreateAsync(user, "Password123!");
-            if(result.Succeeded)
-            {
-                Input.Email = "test@example.com";
-                Input.Password = "Password123!";
-            }
-            else
-            {
-                errorMessage = string.Join(", ", result.Errors.Select(e => e.Description));
-            }
-        }
-        else
-        {
-            Input.Email = "test@example.com";
-            Input.Password = "Password123!";
         }
     }
 

@@ -30,4 +30,19 @@ public interface IRoomRegistry
     /// Get all active room IDs for a specific game type
     /// </summary>
     Task<IReadOnlyList<string>> GetRoomIdsByGameTypeAsync(string gameType);
+    
+    /// <summary>
+    /// Get paginated room IDs for a specific game type using cursor-based pagination
+    /// </summary>
+    Task<(IReadOnlyList<string> RoomIds, long NextCursor)> GetRoomIdsPagedAsync(string gameType, long cursor = 0, int pageSize = 50);
+    
+    /// <summary>
+    /// Acquire a distributed lock for a room
+    /// </summary>
+    Task<bool> TryAcquireLockAsync(string roomId, TimeSpan timeout);
+    
+    /// <summary>
+    /// Release a distributed lock for a room
+    /// </summary>
+    Task ReleaseLockAsync(string roomId);
 }

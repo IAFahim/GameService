@@ -139,10 +139,15 @@ public class GameHub(
             return GameActionResult.Error("Game engine not available");
         }
 
-        var command = new GameCommand(UserId, actionName, payload);
-        
+        // Acquire distributed lock to prevent race conditions
+        if (!await roomRegistry.TryAcquireLockAsync(roomId, TimeSpan.FromSeconds(2)))
+        {
+            return GameActionResult.Error("Game is busy. Please retry.");
+        }
+
         try
         {
+            var command = new GameCommand(UserId, actionName, payload);
             var result = await engine.ExecuteAsync(roomId, command);
 
             // Broadcast state if the action was successful and should broadcast
@@ -168,6 +173,10 @@ public class GameHub(
         {
             logger.LogError(ex, "Error executing action {Action} in room {RoomId}", actionName, roomId);
             return GameActionResult.Error("An error occurred while processing your action");
+        }
+        finally
+        {
+            await roomRegistry.ReleaseLockAsync(roomId);
         }
     }
 

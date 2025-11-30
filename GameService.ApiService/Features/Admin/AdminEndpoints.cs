@@ -96,22 +96,36 @@ public static class AdminEndpoints
     }
 
     /// <summary>
-    /// Get all active games - iterates game types, not rooms
+    /// Get active games with pagination - uses cursor-based pagination via SSCAN
     /// </summary>
     private static async Task<IResult> GetGames(
         IEnumerable<IGameModule> modules,
         IServiceProvider sp,
-        IRoomRegistry registry)
+        IRoomRegistry registry,
+        [FromQuery] string? gameType = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
-        var allGames = new List<GameRoomDto>();
+        // Limit page size to prevent abuse
+        if (pageSize > 100) pageSize = 100;
+        if (pageSize < 1) pageSize = 50;
+        if (page < 1) page = 1;
 
-        // Iterate by game type (small number), not by room (large number)
-        foreach (var module in modules)
+        var allGames = new List<GameRoomDto>();
+        
+        // If gameType specified, only fetch that type (recommended for large scale)
+        var modulesToQuery = string.IsNullOrEmpty(gameType) 
+            ? modules 
+            : modules.Where(m => m.GameName.Equals(gameType, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var module in modulesToQuery)
         {
-            var roomIds = await registry.GetRoomIdsByGameTypeAsync(module.GameName);
             var engine = sp.GetKeyedService<IGameEngine>(module.GameName);
-            
             if (engine == null) continue;
+
+            // Use paginated fetch with cursor
+            var cursor = (long)(page - 1) * pageSize;
+            var (roomIds, _) = await registry.GetRoomIdsPagedAsync(module.GameName, cursor, pageSize);
 
             foreach (var roomId in roomIds)
             {
@@ -127,7 +141,12 @@ public static class AdminEndpoints
                         state.Meta.PlayerSeats
                     ));
                 }
+                
+                // Stop if we've reached the page size
+                if (allGames.Count >= pageSize) break;
             }
+            
+            if (allGames.Count >= pageSize) break;
         }
 
         return Results.Ok(allGames);

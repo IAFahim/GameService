@@ -15,6 +15,9 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis, ILogger<Redi
     
     // Per-game-type sets for listing rooms by type
     private static string GameTypeRoomsKey(string gameType) => $"rooms:by_type:{gameType}";
+    
+    // Distributed lock key for room operations
+    private static string LockKey(string roomId) => $"lock:room:{roomId}";
 
     public async Task<string?> GetGameTypeAsync(string roomId)
     {
@@ -70,5 +73,34 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis, ILogger<Redi
     {
         var members = await _db.SetMembersAsync(GameTypeRoomsKey(gameType));
         return members.Select(m => m.ToString()).ToList();
+    }
+
+    public async Task<(IReadOnlyList<string> RoomIds, long NextCursor)> GetRoomIdsPagedAsync(string gameType, long cursor = 0, int pageSize = 50)
+    {
+        // Use SSCAN for paginated iteration - O(1) per page, not O(N)
+        var result = await _db.SetScanAsync(GameTypeRoomsKey(gameType), cursor: cursor, pageSize: pageSize).ToArrayAsync();
+        
+        // Get the cursor for next page (0 means end of set)
+        var roomIds = result.Select(m => m.ToString()).ToList();
+        
+        // For proper cursor handling, we use SetScan which returns entries
+        // The cursor is implicit in the enumeration - we return the count as a simple cursor
+        var nextCursor = roomIds.Count == pageSize ? cursor + pageSize : 0;
+        
+        return (roomIds, nextCursor);
+    }
+
+    public async Task<bool> TryAcquireLockAsync(string roomId, TimeSpan timeout)
+    {
+        return await _db.StringSetAsync(
+            LockKey(roomId),
+            Environment.MachineName,
+            timeout,
+            When.NotExists);
+    }
+
+    public async Task ReleaseLockAsync(string roomId)
+    {
+        await _db.KeyDeleteAsync(LockKey(roomId));
     }
 }

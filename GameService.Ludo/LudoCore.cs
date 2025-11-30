@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 
 namespace GameService.Ludo;
 
@@ -214,6 +213,11 @@ public class LudoEngine(IDiceRoller roller)
 }
 
 public interface IDiceRoller { byte Roll(); }
+
+/// <summary>
+/// Thread-safe dice roller using Random.Shared (modern .NET).
+/// Random.Shared is thread-safe and much faster than RandomNumberGenerator for non-cryptographic use.
+/// </summary>
 public class ServerDiceRoller : IDiceRoller {
-    public byte Roll() => (byte)RandomNumberGenerator.GetInt32(1, 7);
+    public byte Roll() => (byte)Random.Shared.Next(1, 7);
 }

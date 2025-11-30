@@ -28,13 +28,4 @@ public class GameHub : Hub
     {
         await base.OnDisconnectedAsync(exception);
     }
-    
-    public async Task Ping(string message)
-    {
-        Console.WriteLine($"[Server] Received Ping: {message}");
-
-        string response = $"Success: {message}";
-
-        await Clients.Caller.SendAsync("Pong", response);
-    }
 }

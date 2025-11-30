@@ -4,12 +4,12 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
 using GameService.ApiService.Hubs;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection; // Required for ConfigureHttpClientDefaults
 
 namespace GameService.Tests;
 
 public class GameFlowTests
 {
-    // Increased to 5 minutes for CI container pulls
     private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(5);
     private const string Password = "Test123!";
 
@@ -19,6 +19,16 @@ public class GameFlowTests
         var cancellationToken = TestContext.CurrentContext.CancellationToken;
 
         var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.GameService_AppHost>(cancellationToken);
+
+        // FIX: Configure HTTP client to ignore SSL errors in CI/Test environment
+        appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
+        {
+            clientBuilder.AddStandardResilienceHandler();
+            clientBuilder.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            });
+        });
 
         await using var app = await appHost.BuildAsync(cancellationToken).WaitAsync(Timeout, cancellationToken);
         await app.StartAsync(cancellationToken).WaitAsync(Timeout, cancellationToken);
@@ -40,10 +50,20 @@ public class GameFlowTests
         Assert.That(accessToken, Is.Not.Null);
 
         var hubUrl = new Uri(httpClient.BaseAddress!, "/hubs/game").ToString();
+        
+        // FIX: Configure SignalR to trust the dev certificate as well
         var connection = new HubConnectionBuilder()
             .WithUrl(hubUrl, options =>
             {
                 options.AccessTokenProvider = () => Task.FromResult(accessToken!);
+                options.HttpMessageHandlerFactory = (handler) =>
+                {
+                    if (handler is HttpClientHandler clientHandler)
+                    {
+                        clientHandler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                    }
+                    return handler;
+                };
             })
             .Build();
 

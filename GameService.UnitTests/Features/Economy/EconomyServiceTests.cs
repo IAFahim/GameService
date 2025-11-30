@@ -2,6 +2,7 @@ using FluentAssertions;
 using GameService.ServiceDefaults;
 using GameService.ApiService.Features.Economy;
 using GameService.ServiceDefaults.Data;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 
@@ -10,6 +11,7 @@ namespace GameService.UnitTests.Features.Economy;
 [TestFixture]
 public class EconomyServiceTests
 {
+    private SqliteConnection _connection;
     private GameDbContext _db;
     private Mock<IGameEventPublisher> _publisherMock;
     private EconomyService _service;
@@ -17,14 +19,18 @@ public class EconomyServiceTests
     [SetUp]
     public void Setup()
     {
+        // Use SQLite in-memory mode. The DB persists as long as the connection is open.
+        _connection = new SqliteConnection("DataSource=:memory:");
+        _connection.Open();
+
         var options = new DbContextOptionsBuilder<GameDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .ConfigureWarnings(x => x.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+            .UseSqlite(_connection)
             .Options;
 
         _publisherMock = new Mock<IGameEventPublisher>();
 
-        _db = new GameDbContext(options, _publisherMock.Object); 
+        _db = new GameDbContext(options, _publisherMock.Object);
+        _db.Database.EnsureCreated();
         
         _service = new EconomyService(_db, _publisherMock.Object);
     }
@@ -33,6 +39,7 @@ public class EconomyServiceTests
     public void TearDown()
     {
         _db.Dispose();
+        _connection.Dispose();
     }
 
     [Test]
@@ -47,8 +54,8 @@ public class EconomyServiceTests
 
         var result = await _service.ProcessTransactionAsync(userId, amount);
 
-        result.Success.Should().BeTrue();
-        result.NewBalance.Should().Be(200);
+        result.Success.Should().BeTrue($"Logic failed with error: {result.ErrorMessage}");
+        result.NewBalance.Should().Be(200); // 100 (Default) + 100 (Added)
 
         var profile = await _db.PlayerProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
         profile.Should().NotBeNull();

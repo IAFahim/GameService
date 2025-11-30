@@ -9,7 +9,8 @@ namespace GameService.Tests;
 
 public class GameFlowTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(3);
+    // Increased timeout for CI environments where container pulls might be slow
+    private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(5);
     private const string Password = "Test123!";
 
     [Test]

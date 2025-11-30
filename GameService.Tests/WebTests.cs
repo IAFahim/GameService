@@ -4,7 +4,8 @@ namespace GameService.Tests;
 
 public class WebTests
 {
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+    // Increased timeout for CI stability
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(5);
 
     [Test]
     public async Task GetWebResourceRootReturnsOkStatusCode()

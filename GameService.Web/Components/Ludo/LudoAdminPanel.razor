@@ -4,51 +4,67 @@
 @inject GameService.Web.Services.GameAdminService AdminService
 
 <div class="row">
-    <!-- Visualization Column (Same as before) -->
+    <!-- Visualization Column -->
     <div class="col-md-8">
-        <!-- ... Visualization Code ... -->
-         <div class="card mb-4">
-            <div class="card-header bg-dark text-white">State</div>
-            <div class="card-body">
-                <p>Current Turn: Seat @Game.State.CurrentPlayer</p>
-                <p>Last Dice: @Game.State.LastDiceRoll</p>
-            </div>
+        <div class="row g-3">
+            @for (int p = 0; p < 4; p++)
+            {
+                <div class="col-6">
+                    <div class="card @(Game.State.CurrentPlayer == p ? "border-primary border-3" : "")">
+                        <div class="card-header @GetColorClass(p) text-white d-flex justify-content-between">
+                            <span>Player @p</span>
+                            @if(Game.State.CurrentPlayer == p) { <span class="badge bg-light text-dark">Active Turn</span> }
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                @for (int t = 0; t < 4; t++)
+                                {
+                                    int pos = GetTokenPos(p, t);
+                                    <div class="text-center border rounded p-2" style="width: 23%;">
+                                        <small>Token @t</small><br/>
+                                        <strong>@FormatPos(pos)</strong>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+        
+        <div class="alert alert-secondary mt-3 text-center">
+            <h3>Dice: @(Game.State.LastDiceRoll == 0 ? "Waiting..." : Game.State.LastDiceRoll)</h3>
         </div>
     </div>
 
     <!-- Controls Column -->
     <div class="col-md-4">
         <div class="card mb-4">
-            <div class="card-header bg-danger text-white">
-                <h5 class="mb-0">God Mode Controls</h5>
-            </div>
+            <div class="card-header bg-danger text-white">God Mode Controls</div>
             <div class="card-body">
-                <p class="text-muted small">
-                    Actions here are performed by the SERVER on behalf of whoever's turn it is. 
-                    All players will see the move happen.
-                </p>
-                
-                <hr />
-
                 <h6>1. Roll Dice</h6>
-                <button class="btn btn-warning w-100 mb-3" @onclick="DoForceRoll" disabled="@(isBusy || Game.State.LastDiceRoll != 0)">
-                    @if(isBusy) { <span class="spinner-border spinner-border-sm"></span> }
+                <!-- Disable if dice already rolled -->
+                <button class="btn btn-warning w-100 mb-3" 
+                        @onclick="DoForceRoll" 
+                        disabled="@(isBusy || Game.State.LastDiceRoll != 0)">
                     Force Roll
                 </button>
                 
                 <h6>2. Move Token</h6>
-                <div class="d-grid gap-2 d-md-block">
+                <div class="d-grid gap-2">
                     @for (int i = 0; i < 4; i++)
                     {
                         var tIdx = i;
-                        <button class="btn btn-outline-danger me-1 mb-1" 
+                        var isLegal = IsMoveLegal(tIdx);
+                        
+                        <button class="btn @(isLegal ? "btn-success" : "btn-outline-secondary")" 
                                 @onclick="() => DoForceMove(tIdx)"
-                                disabled="@(isBusy || Game.State.LastDiceRoll == 0)">
-                            Token @tIdx
+                                disabled="@(isBusy || !isLegal)">
+                            Token @tIdx @(isLegal ? "(Valid)" : "")
                         </button>
                     }
                 </div>
-
+                
                 <hr />
                 <button class="btn btn-secondary w-100" @onclick="OnRefresh">Refresh State</button>
             </div>
@@ -61,6 +77,30 @@
     [Parameter] public EventCallback OnRefresh { get; set; }
     
     private bool isBusy = false;
+
+    private int GetTokenPos(int player, int tokenIdx) 
+    {
+        return Game.State.GetTokenPos(player, tokenIdx);
+    }
+
+    private string GetColorClass(int p) => p switch { 0 => "bg-danger", 1 => "bg-success", 2 => "bg-warning text-dark", _ => "bg-primary" };
+
+    private string FormatPos(int pos)
+    {
+        if (pos == 0) return "Base";
+        if (pos == 57) return "Home";
+        return pos.ToString();
+    }
+
+    private bool IsMoveLegal(int tokenIndex)
+    {
+        if (Game.State.LastDiceRoll == 0) return false;
+        
+        // Use the engine to calculate legal moves locally since we have the full state
+        var engine = new LudoEngine(Game.State, null!); 
+        var legalMoves = engine.GetLegalMoves();
+        return legalMoves.Contains(tokenIndex);
+    }
 
     private async Task DoForceRoll()
     {

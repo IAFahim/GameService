@@ -4,41 +4,47 @@
 @inject GameAdminService AdminService
 @inject NavigationManager Nav
 @using System.Text.Json
+@using GameService.Ludo
+@using GameService.Web.Components.Ludo
 
-<PageTitle>Game Inspector: @RoomId</PageTitle>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="games">Active Games</a></li>
+                <li class="breadcrumb-item active" aria-current="page">@RoomId</li>
+            </ol>
+        </nav>
+        <button class="btn btn-sm btn-outline-danger" @onclick="DeleteGame">
+            <i class="bi bi-trash"></i> Delete Room
+        </button>
+    </div>
 
-<div class="mb-3">
-    <a href="games" class="btn btn-outline-secondary">&larr; Back to Games</a>
-</div>
-
-@if (gameState == null)
-{
-    if (notFound)
+    @if (gameState.ValueKind == JsonValueKind.Undefined)
     {
-        <div class="alert alert-danger">Game not found.</div>
+        <div class="spinner-border text-primary"></div>
+    }
+    else if (isLudo)
+    {
+        <!-- RENDER THE VISUAL PANEL -->
+        <LudoAdminPanel Game="ludoContext!" OnRefresh="LoadGame" />
     }
     else
     {
-        <div class="spinner-border text-primary" role="status"></div>
+        <!-- Fallback for other game types or raw view -->
+        <div class="alert alert-warning">
+            Visual inspector not available for this game type. Showing raw data.
+        </div>
+        <pre class="bg-light p-3 border rounded">@gameState.GetRawText()</pre>
     }
-}
-else
-{
-    <div class="card">
-        <div class="card-header">
-            Game State (Raw)
-        </div>
-        <div class="card-body">
-            <pre>@JsonSerializer.Serialize(gameState, new JsonSerializerOptions { WriteIndented = true })</pre>
-        </div>
-    </div>
-}
+</div>
 
 @code {
     [Parameter] public string RoomId { get; set; } = "";
     
-    private JsonElement? gameState;
-    private bool notFound = false;
+    private JsonElement gameState;
+    private bool isLudo;
+    private LudoContext? ludoContext;
 
     protected override async Task OnInitializedAsync()
     {
@@ -47,9 +53,78 @@ else
 
     private async Task LoadGame()
     {
-        gameState = await AdminService.GetGameStateAsync(RoomId);
+        var json = await AdminService.GetGameStateAsync(RoomId);
+        if (json.HasValue)
+        {
+            gameState = json.Value;
+            
+            // Check GameType from Meta
+            string? gameType = null;
+            if (gameState.TryGetProperty("meta", out var metaProp) && 
+                metaProp.TryGetProperty("gameType", out var typeProp))
+            {
+                gameType = typeProp.GetString();
+            }
+
+            if (string.Equals(gameType, "Ludo", StringComparison.OrdinalIgnoreCase))
+            {
+                try 
+                {
+                    ludoContext = MapToLudoContext(gameState);
+                    isLudo = (ludoContext != null);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Ludo mapping failed: {ex}");
+                    isLudo = false; 
+                }
+            }
+            else 
+            {
+                isLudo = false;
+            }
+        }
+    }
+
+    private LudoContext MapToLudoContext(JsonElement root)
+    {
+        var roomId = root.GetProperty("roomId").GetString() ?? "";
         
-        if (gameState == null) notFound = true;
-        else notFound = false;
+        // Map Meta
+        var metaEl = root.GetProperty("meta");
+        var meta = JsonSerializer.Deserialize<LudoRoomMeta>(metaEl.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new LudoRoomMeta();
+
+        // Map State
+        var stateEl = root.GetProperty("state");
+        var ludoState = new LudoState();
+        
+        ludoState.CurrentPlayer = (byte)stateEl.GetProperty("currentPlayer").GetInt32();
+        ludoState.LastDiceRoll = (byte)stateEl.GetProperty("lastDiceRoll").GetInt32();
+        ludoState.TurnId = stateEl.GetProperty("turnId").GetInt32();
+        
+        var winner = stateEl.GetProperty("winner").GetInt32();
+        ludoState.Winner = winner == -1 ? (byte)255 : (byte)winner;
+
+        // ActiveSeatsBinary to byte
+        var activeSeatsStr = stateEl.GetProperty("activeSeatsBinary").GetString() ?? "0000";
+        ludoState.ActiveSeats = Convert.ToByte(activeSeatsStr, 2);
+
+        // Tokens (Base64) to TokenBuffer
+        if (stateEl.TryGetProperty("tokens", out var tokensProp) && tokensProp.ValueKind == JsonValueKind.String)
+        {
+            var tokenBytes = tokensProp.GetBytesFromBase64();
+            for (int i = 0; i < 16 && i < tokenBytes.Length; i++)
+            {
+                ludoState.Tokens[i] = tokenBytes[i];
+            }
+        }
+
+        return new LudoContext(roomId, ludoState, meta);
+    }
+    
+    private async Task DeleteGame()
+    {
+        await AdminService.DeleteGameAsync(RoomId);
+        Nav.NavigateTo("games");
     }
 }

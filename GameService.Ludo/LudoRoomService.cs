@@ -7,6 +7,7 @@ namespace GameService.Ludo;
 
 public class LudoRoomService(ILudoRepository repository, IHubContext<LudoHub> hubContext) : IGameRoomService
 {
+    public string GameType => "Ludo";
     public async Task<string> CreateRoomAsync(string? hostUserId, int playerCount = 4)
     {
         string roomId = Guid.NewGuid().ToString("N")[..8];
@@ -131,6 +132,10 @@ public class LudoRoomService(ILudoRepository repository, IHubContext<LudoHub> hu
         if (ctx == null) return null;
 
         var s = ctx.State;
+        var engine = new LudoEngine(s, null!); // Dice roller not needed for state query
+        
+        // Calculate legal moves for the UI
+        var legalMoves = engine.GetLegalMoves();
 
         var tokenArray = new byte[16];
         for(int i=0; i<16; i++) tokenArray[i] = s.Tokens[i];
@@ -146,7 +151,8 @@ public class LudoRoomService(ILudoRepository repository, IHubContext<LudoHub> hu
                 TurnId = s.TurnId,
                 Winner = s.Winner == 255 ? -1 : (int)s.Winner,
                 ActiveSeatsBinary = Convert.ToString(s.ActiveSeats, 2).PadLeft(4, '0'),
-                Tokens = tokenArray
+                Tokens = tokenArray,
+                LegalMoves = legalMoves
             }
         };
     }

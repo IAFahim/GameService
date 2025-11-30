@@ -195,6 +195,22 @@ public class LudoEngine(IDiceRoller roller)
         vPid = -1; vTid = -1;
         return false; 
     }
+
+    public List<int> GetLegalMoves()
+    {
+        var moves = new List<int>();
+        if (State.LastDiceRoll == 0) return moves;
+
+        for (int i = 0; i < 4; i++)
+        {
+            var pos = State.GetTokenPos(State.CurrentPlayer, i);
+            if (PredictMove(State.CurrentPlayer, pos, State.LastDiceRoll, out _))
+            {
+                moves.Add(i);
+            }
+        }
+        return moves;
+    }
 }
 
 public interface IDiceRoller { byte Roll(); }

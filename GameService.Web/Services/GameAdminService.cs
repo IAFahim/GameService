@@ -64,9 +64,9 @@ public class GameAdminService(HttpClient http)
         return await http.GetFromJsonAsync<List<SupportedGameDto>>("/games/supported") ?? [];
     }
     
-    public async Task CreateGameAsync(int playerCount)
+    public async Task CreateGameAsync(string gameType, int playerCount)
     {
-        var response = await http.PostAsJsonAsync("/admin/games", new { PlayerCount = playerCount });
+        var response = await http.PostAsJsonAsync("/admin/games", new { GameType = gameType, PlayerCount = playerCount });
         response.EnsureSuccessStatusCode();
     }
 }

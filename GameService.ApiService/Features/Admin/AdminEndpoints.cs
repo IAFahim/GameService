@@ -135,13 +135,13 @@ public static class AdminEndpoints
         [FromBody] CreateGameRequest req,
         IEnumerable<IGameRoomService> services)
     {
-        var service = services.FirstOrDefault(); 
-        if (service == null) return Results.BadRequest("No game services available");
+        var service = services.FirstOrDefault(s => s.GameType.Equals(req.GameType, StringComparison.OrdinalIgnoreCase));
+        if (service == null) return Results.BadRequest($"Game type '{req.GameType}' not supported");
 
         var roomId = await service.CreateRoomAsync(null, req.PlayerCount);
     
         return Results.Ok(new { RoomId = roomId });
     }
     
-    public record CreateGameRequest(int PlayerCount);
+    public record CreateGameRequest(string GameType, int PlayerCount);
 }

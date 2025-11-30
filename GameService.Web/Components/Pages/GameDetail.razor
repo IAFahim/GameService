@@ -5,6 +5,7 @@
 @inject NavigationManager Nav
 @using System.Text.Json
 @using GameService.Ludo
+@using GameService.GameCore
 @using GameService.Web.Components.Ludo
 
 <div class="container-fluid">
@@ -20,31 +21,38 @@
         </button>
     </div>
 
-    @if (gameState.ValueKind == JsonValueKind.Undefined)
+    @if (isLoading)
     {
         <div class="spinner-border text-primary"></div>
     }
-    else if (isLudo)
+    else if (ludoState != null)
     {
-        <!-- RENDER THE VISUAL PANEL -->
-        <LudoAdminPanel Game="ludoContext!" OnRefresh="LoadGame" />
+        <!-- RENDER THE VISUAL PANEL FOR LUDO -->
+        <LudoAdminPanel RoomId="@RoomId" State="ludoState" OnRefresh="LoadGame" />
     }
-    else
+    else if (!string.IsNullOrEmpty(rawJson))
     {
         <!-- Fallback for other game types or raw view -->
         <div class="alert alert-warning">
             Visual inspector not available for this game type. Showing raw data.
         </div>
-        <pre class="bg-light p-3 border rounded">@gameState.GetRawText()</pre>
+        <pre class="bg-light p-3 border rounded">@rawJson</pre>
+    }
+    else
+    {
+        <div class="alert alert-danger">
+            Room not found or failed to load.
+        </div>
     }
 </div>
 
 @code {
     [Parameter] public string RoomId { get; set; } = "";
     
-    private JsonElement gameState;
-    private bool isLudo;
-    private LudoContext? ludoContext;
+    private bool isLoading = true;
+    private string? gameType;
+    private string? rawJson;
+    private LudoStateDto? ludoState;
 
     protected override async Task OnInitializedAsync()
     {
@@ -53,73 +61,85 @@
 
     private async Task LoadGame()
     {
-        var json = await AdminService.GetGameStateAsync(RoomId);
-        if (json.HasValue)
+        isLoading = true;
+        StateHasChanged();
+        
+        try
         {
-            gameState = json.Value;
-            
-            // Check GameType from Meta
-            string? gameType = null;
-            if (gameState.TryGetProperty("meta", out var metaProp) && 
-                metaProp.TryGetProperty("gameType", out var typeProp))
+            var json = await AdminService.GetGameStateAsync(RoomId);
+            if (json.HasValue)
             {
-                gameType = typeProp.GetString();
-            }
+                rawJson = json.Value.GetRawText();
+                
+                // Check GameType from Meta
+                if (json.Value.TryGetProperty("meta", out var metaProp) && 
+                    metaProp.TryGetProperty("gameType", out var typeProp))
+                {
+                    gameType = typeProp.GetString();
+                }
 
-            if (string.Equals(gameType, "Ludo", StringComparison.OrdinalIgnoreCase))
-            {
-                try 
+                if (string.Equals(gameType, "Ludo", StringComparison.OrdinalIgnoreCase))
                 {
-                    ludoContext = MapToLudoContext(gameState);
-                    isLudo = (ludoContext != null);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Ludo mapping failed: {ex}");
-                    isLudo = false; 
+                    ludoState = MapToLudoState(json.Value);
                 }
             }
-            else 
-            {
-                isLudo = false;
-            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load game: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
         }
     }
 
-    private LudoContext MapToLudoContext(JsonElement root)
+    private LudoStateDto? MapToLudoState(JsonElement root)
     {
-        var roomId = root.GetProperty("roomId").GetString() ?? "";
-        
-        // Map Meta
-        var metaEl = root.GetProperty("meta");
-        var meta = JsonSerializer.Deserialize<LudoRoomMeta>(metaEl.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new LudoRoomMeta();
-
-        // Map State
-        var stateEl = root.GetProperty("state");
-        var ludoState = new LudoState();
-        
-        ludoState.CurrentPlayer = (byte)stateEl.GetProperty("currentPlayer").GetInt32();
-        ludoState.LastDiceRoll = (byte)stateEl.GetProperty("lastDiceRoll").GetInt32();
-        ludoState.TurnId = stateEl.GetProperty("turnId").GetInt32();
-        
-        var winner = stateEl.GetProperty("winner").GetInt32();
-        ludoState.Winner = winner == -1 ? (byte)255 : (byte)winner;
-
-        // ActiveSeatsBinary to byte
-        var activeSeatsStr = stateEl.GetProperty("activeSeatsBinary").GetString() ?? "0000";
-        ludoState.ActiveSeats = Convert.ToByte(activeSeatsStr, 2);
-
-        // Tokens (Base64) to TokenBuffer
-        if (stateEl.TryGetProperty("tokens", out var tokensProp) && tokensProp.ValueKind == JsonValueKind.String)
+        try
         {
-            var tokenBytes = tokensProp.GetBytesFromBase64();
-            for (int i = 0; i < 16 && i < tokenBytes.Length; i++)
-            {
-                ludoState.Tokens[i] = tokenBytes[i];
-            }
-        }
+            if (!root.TryGetProperty("state", out var stateEl))
+                return null;
 
-        return new LudoContext(roomId, ludoState, meta);
+            var tokens = new byte[16];
+            if (stateEl.TryGetProperty("tokens", out var tokensProp))
+            {
+                if (tokensProp.ValueKind == JsonValueKind.Array)
+                {
+                    int i = 0;
+                    foreach (var token in tokensProp.EnumerateArray())
+                    {
+                        if (i < 16) tokens[i++] = (byte)token.GetInt32();
+                    }
+                }
+                else if (tokensProp.ValueKind == JsonValueKind.String)
+                {
+                    var tokenBytes = tokensProp.GetBytesFromBase64();
+                    Array.Copy(tokenBytes, tokens, Math.Min(tokenBytes.Length, 16));
+                }
+            }
+
+            return new LudoStateDto
+            {
+                CurrentPlayer = stateEl.GetProperty("currentPlayer").GetInt32(),
+                LastDiceRoll = stateEl.GetProperty("lastDiceRoll").GetInt32(),
+                TurnId = stateEl.GetProperty("turnId").GetInt32(),
+                Winner = stateEl.GetProperty("winner").GetInt32(),
+                ActiveSeatsBinary = stateEl.TryGetProperty("activeSeatsBinary", out var asb) 
+                    ? asb.GetString() ?? "0000" 
+                    : "0000",
+                Tokens = tokens,
+                ConsecutiveSixes = stateEl.TryGetProperty("consecutiveSixes", out var cs) 
+                    ? cs.GetInt32() 
+                    : 0
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ludo state mapping failed: {ex}");
+            return null;
+        }
     }
     
     private async Task DeleteGame()

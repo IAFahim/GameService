@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
 @using GameService.Ludo
+@using GameService.GameCore
 @inject GameService.Web.Services.GameAdminService AdminService
 
 <div class="row">
@@ -9,19 +10,21 @@
         <div class="row g-3">
             @for (int p = 0; p < 4; p++)
             {
+                var playerIdx = p;
                 <div class="col-6">
-                    <div class="card @(Game.State.CurrentPlayer == p ? "border-primary border-3" : "")">
-                        <div class="card-header @GetColorClass(p) text-white d-flex justify-content-between">
-                            <span>Player @p</span>
-                            @if(Game.State.CurrentPlayer == p) { <span class="badge bg-light text-dark">Active Turn</span> }
+                    <div class="card @(State.CurrentPlayer == playerIdx ? "border-primary border-3" : "")">
+                        <div class="card-header @GetColorClass(playerIdx) text-white d-flex justify-content-between">
+                            <span>Player @playerIdx</span>
+                            @if(State.CurrentPlayer == playerIdx) { <span class="badge bg-light text-dark">Active Turn</span> }
                         </div>
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 @for (int t = 0; t < 4; t++)
                                 {
-                                    int pos = GetTokenPos(p, t);
+                                    var tokenIdx = t;
+                                    int pos = GetTokenPos(playerIdx, tokenIdx);
                                     <div class="text-center border rounded p-2" style="width: 23%;">
-                                        <small>Token @t</small><br/>
+                                        <small>Token @tokenIdx</small><br/>
                                         <strong>@FormatPos(pos)</strong>
                                     </div>
                                 }
@@ -33,7 +36,7 @@
         </div>
         
         <div class="alert alert-secondary mt-3 text-center">
-            <h3>Dice: @(Game.State.LastDiceRoll == 0 ? "Waiting..." : Game.State.LastDiceRoll)</h3>
+            <h3>Dice: @(State.LastDiceRoll == 0 ? "Waiting..." : State.LastDiceRoll)</h3>
         </div>
     </div>
 
@@ -46,7 +49,7 @@
                 <!-- Disable if dice already rolled -->
                 <button class="btn btn-warning w-100 mb-3" 
                         @onclick="DoForceRoll" 
-                        disabled="@(isBusy || Game.State.LastDiceRoll != 0)">
+                        disabled="@(isBusy || State.LastDiceRoll != 0)">
                     Force Roll
                 </button>
                 
@@ -73,14 +76,16 @@
 </div>
 
 @code {
-    [Parameter] public required LudoContext Game { get; set; }
+    [Parameter] public required string RoomId { get; set; }
+    [Parameter] public required LudoStateDto State { get; set; }
     [Parameter] public EventCallback OnRefresh { get; set; }
     
     private bool isBusy = false;
 
     private int GetTokenPos(int player, int tokenIdx) 
     {
-        return Game.State.GetTokenPos(player, tokenIdx);
+        var index = (player * 4) + tokenIdx;
+        return index < State.Tokens.Length ? State.Tokens[index] : 0;
     }
 
     private string GetColorClass(int p) => p switch { 0 => "bg-danger", 1 => "bg-success", 2 => "bg-warning text-dark", _ => "bg-primary" };
@@ -94,12 +99,19 @@
 
     private bool IsMoveLegal(int tokenIndex)
     {
-        if (Game.State.LastDiceRoll == 0) return false;
+        if (State.LastDiceRoll == 0) return false;
         
-        // Use the engine to calculate legal moves locally since we have the full state
-        var engine = new LudoEngine(Game.State, null!); 
-        var legalMoves = engine.GetLegalMoves();
-        return legalMoves.Contains(tokenIndex);
+        // Check if this token can move based on current dice roll
+        int currentPos = GetTokenPos(State.CurrentPlayer, tokenIndex);
+        
+        // Token in base needs 6 to move
+        if (currentPos == 0) return State.LastDiceRoll == 6;
+        
+        // Token at home can't move
+        if (currentPos == 57) return false;
+        
+        // Check if move would exceed home
+        return (currentPos + State.LastDiceRoll) <= 57;
     }
 
     private async Task DoForceRoll()
@@ -107,7 +119,7 @@
         isBusy = true;
         try 
         {
-            await AdminService.PlayLudoRollAsync(Game.RoomId);
+            await AdminService.PlayLudoRollAsync(RoomId);
             await OnRefresh.InvokeAsync();
         }
         catch (Exception ex)
@@ -122,7 +134,7 @@
         isBusy = true;
         try 
         {
-            await AdminService.PlayLudoMoveAsync(Game.RoomId, tokenIndex);
+            await AdminService.PlayLudoMoveAsync(RoomId, tokenIndex);
             await OnRefresh.InvokeAsync();
         }
         catch (Exception ex)

@@ -1,4 +1,6 @@
 using System.Text.Json.Serialization;
+using GameService.ApiService.Hubs;
+using GameService.GameCore;
 using GameService.ServiceDefaults.DTOs;
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Identity.Data;
@@ -20,6 +22,22 @@ namespace GameService.ApiService;
 [JsonSerializable(typeof(PlayerChangeType))]
 [JsonSerializable(typeof(SupportedGameDto))]
 [JsonSerializable(typeof(List<SupportedGameDto>))]
+// Game core types
+[JsonSerializable(typeof(GameRoomDto))]
+[JsonSerializable(typeof(List<GameRoomDto>))]
+[JsonSerializable(typeof(GameRoomMeta))]
+[JsonSerializable(typeof(GameStateResponse))]
+[JsonSerializable(typeof(GameActionResult))]
+[JsonSerializable(typeof(GameEvent))]
+[JsonSerializable(typeof(List<GameEvent>))]
+[JsonSerializable(typeof(JoinRoomResult))]
+// Hub DTOs
+[JsonSerializable(typeof(CreateRoomResponse))]
+[JsonSerializable(typeof(JoinRoomResponse))]
+[JsonSerializable(typeof(PlayerJoinedEvent))]
+[JsonSerializable(typeof(PlayerLeftEvent))]
+[JsonSerializable(typeof(ActionErrorEvent))]
+[JsonSerializable(typeof(Dictionary<string, int>))]
 internal partial class GameJsonContext : JsonSerializerContext
 {
 }

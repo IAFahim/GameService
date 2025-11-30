@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using GameService.ApiService.Features.Common;
 using GameService.ServiceDefaults;
 using GameService.GameCore;
@@ -16,13 +15,122 @@ public static class AdminEndpoints
     {
         var group = app.MapGroup("/admin").RequireAuthorization("AdminPolicy");
 
+        // Game management - now with O(1) lookups
         group.MapPost("/games", CreateGame);
         group.MapGet("/games", GetGames);
         group.MapGet("/games/{roomId}", GetGameState);
         group.MapDelete("/games/{roomId}", DeleteGame);
+        
+        // Player management
         group.MapGet("/players", GetPlayers);
         group.MapPost("/players/{userId}/coins", UpdatePlayerCoins);
         group.MapDelete("/players/{userId}", DeletePlayer);
+    }
+
+    /// <summary>
+    /// Create a game room - O(1) service lookup using keyed services
+    /// </summary>
+    private static async Task<IResult> CreateGame(
+        [FromBody] CreateGameRequest req,
+        IServiceProvider sp,
+        IRoomRegistry registry)
+    {
+        // O(1) lookup using keyed service
+        var roomService = sp.GetKeyedService<IGameRoomService>(req.GameType);
+        if (roomService == null)
+        {
+            return Results.BadRequest($"Game type '{req.GameType}' not supported");
+        }
+
+        var roomId = await roomService.CreateRoomAsync(null, req.PlayerCount);
+        return Results.Ok(new { RoomId = roomId, GameType = req.GameType });
+    }
+
+    /// <summary>
+    /// Get game state - O(1) room registry lookup then O(1) service lookup
+    /// </summary>
+    private static async Task<IResult> GetGameState(
+        string roomId, 
+        IServiceProvider sp,
+        IRoomRegistry registry)
+    {
+        // O(1) lookup: What game type is this room?
+        var gameType = await registry.GetGameTypeAsync(roomId);
+        if (gameType == null)
+        {
+            return Results.NotFound($"Room '{roomId}' not found");
+        }
+
+        // O(1) lookup: Get the correct engine
+        var engine = sp.GetKeyedService<IGameEngine>(gameType);
+        if (engine == null)
+        {
+            return Results.NotFound($"Game engine for '{gameType}' not available");
+        }
+
+        var state = await engine.GetStateAsync(roomId);
+        return state != null ? Results.Ok(state) : Results.NotFound();
+    }
+
+    /// <summary>
+    /// Delete a game room - O(1) lookups
+    /// </summary>
+    private static async Task<IResult> DeleteGame(
+        string roomId, 
+        IServiceProvider sp,
+        IRoomRegistry registry)
+    {
+        var gameType = await registry.GetGameTypeAsync(roomId);
+        if (gameType == null)
+        {
+            return Results.NotFound($"Room '{roomId}' not found");
+        }
+
+        var roomService = sp.GetKeyedService<IGameRoomService>(gameType);
+        if (roomService != null)
+        {
+            await roomService.DeleteRoomAsync(roomId);
+        }
+
+        return Results.Ok(new { RoomId = roomId, Deleted = true });
+    }
+
+    /// <summary>
+    /// Get all active games - iterates game types, not rooms
+    /// </summary>
+    private static async Task<IResult> GetGames(
+        IEnumerable<IGameModule> modules,
+        IServiceProvider sp,
+        IRoomRegistry registry)
+    {
+        var allGames = new List<GameRoomDto>();
+
+        // Iterate by game type (small number), not by room (large number)
+        foreach (var module in modules)
+        {
+            var roomIds = await registry.GetRoomIdsByGameTypeAsync(module.GameName);
+            var engine = sp.GetKeyedService<IGameEngine>(module.GameName);
+            
+            if (engine == null) continue;
+
+            foreach (var roomId in roomIds)
+            {
+                var state = await engine.GetStateAsync(roomId);
+                if (state != null)
+                {
+                    allGames.Add(new GameRoomDto(
+                        state.RoomId,
+                        state.GameType,
+                        state.Meta.CurrentPlayerCount,
+                        state.Meta.MaxPlayers,
+                        state.Meta.IsPublic,
+                        state.Meta.PlayerSeats
+                    ));
+                }
+            }
+        }
+
+        return Results.Ok(allGames);
     }
 
     private static async Task<IResult> GetPlayers(
@@ -101,46 +209,6 @@ public static class AdminEndpoints
         await publisher.PublishPlayerUpdatedAsync(message);
 
         return Results.Ok();
-    }
-
-    private static async Task<IResult> GetGameState(string roomId, IEnumerable<IGameRoomService> services)
-    {
-        foreach (var service in services)
-        {
-            var state = await service.GetGameStateAsync(roomId);
-            if (state != null) return Results.Ok(state);
-        }
-        return Results.NotFound();
-    }
-
-    private static async Task<IResult> DeleteGame(string roomId, IEnumerable<IGameRoomService> services)
-    {
-        foreach (var service in services)
-        {
-            await service.DeleteRoomAsync(roomId);
-        }
-        return Results.Ok();
-    }
-    private static async Task<IResult> GetGames(IEnumerable<IGameRoomService> services)
-    {
-        var allGames = new List<GameRoomDto>();
-        foreach (var service in services)
-        {
-            allGames.AddRange(await service.GetActiveGamesAsync());
-        }
-        return Results.Ok(allGames);
-    }
-    
-    private static async Task<IResult> CreateGame(
-        [FromBody] CreateGameRequest req,
-        IEnumerable<IGameRoomService> services)
-    {
-        var service = services.FirstOrDefault(s => s.GameType.Equals(req.GameType, StringComparison.OrdinalIgnoreCase));
-        if (service == null) return Results.BadRequest($"Game type '{req.GameType}' not supported");
-
-        var roomId = await service.CreateRoomAsync(null, req.PlayerCount);
-    
-        return Results.Ok(new { RoomId = roomId });
     }
     
     public record CreateGameRequest(string GameType, int PlayerCount);

@@ -1,0 +1,51 @@
+name: .NET Game Service Tests
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    services:
+      # We rely on Aspire to spin up containers, but having a Redis service 
+      # available as a fallback or for specific unit tests is often helpful.
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # Matches your project's TargetFramework (net10.0)
+          # Note: Since .NET 10 is preview/future, ensure 'include-prerelease' is true
+          dotnet-version: '10.0.x'
+          include-prerelease: true
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Run Tests
+        # This runs the integration tests. 
+        # Aspire.Hosting.Testing will use the Docker socket on the runner to spawn Postgres/Redis containers.
+        run: dotnet test --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx"
+        env:
+          # Ensure the runner uses the connection string format Aspire expects or handled by TestContainers
+          ASPNETCORE_ENVIRONMENT: Testing
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/test-results.trx"

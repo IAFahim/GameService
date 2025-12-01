@@ -60,20 +60,20 @@ public sealed class LudoRoomService : IGameRoomService
         if (ctx == null)
             return JoinRoomResult.Error("Room not found");
 
-        // Check if already in room
         if (ctx.Meta.PlayerSeats.TryGetValue(userId, out var existingSeat))
             return JoinRoomResult.Ok(existingSeat);
 
-        // Check if room is full
         if (ctx.Meta.PlayerSeats.Count >= ctx.Meta.MaxPlayers)
             return JoinRoomResult.Error("Room is full");
 
-        // Find available seat
         var takenSeats = ctx.Meta.PlayerSeats.Values.ToHashSet();
         var seatIndex = -1;
-        for (int i = 0; i < ctx.Meta.MaxPlayers; i++)
+
+        for (int i = 0; i < 4; i++)
         {
-            if (!takenSeats.Contains(i))
+            bool isSeatActive = (ctx.State.ActiveSeats & (1 << i)) != 0;
+            
+            if (isSeatActive && !takenSeats.Contains(i))
             {
                 seatIndex = i;
                 break;
@@ -83,7 +83,6 @@ public sealed class LudoRoomService : IGameRoomService
         if (seatIndex == -1)
             return JoinRoomResult.Error("No available seats");
 
-        // Update metadata with new player
         var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats)
         {
             [userId] = seatIndex

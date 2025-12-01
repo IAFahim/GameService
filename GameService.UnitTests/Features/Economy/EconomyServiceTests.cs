@@ -19,7 +19,6 @@ public class EconomyServiceTests
     [SetUp]
     public void Setup()
     {
-        // Keep connection open to persist the in-memory DB across contexts
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
 
@@ -48,14 +47,11 @@ public class EconomyServiceTests
         var userId = "user1";
         var user = new ApplicationUser { Id = userId, UserName = "user1", Email = "user1@example.com" };
         _db.Users.Add(user);
-        
-        // SaveChanges triggers GameDbContext logic which AUTO-CREATES a profile with 100 coins
+
         await _db.SaveChangesAsync();
 
-        // FIX: We must manually delete the profile to simulate "WhenNotExists"
         await _db.PlayerProfiles.Where(p => p.UserId == userId).ExecuteDeleteAsync();
-        
-        // IMPORTANT: Clear tracking so EF doesn't think the profile still exists locally
+
         _db.ChangeTracker.Clear();
 
         var amount = 100;
@@ -63,7 +59,6 @@ public class EconomyServiceTests
         var result = await _service.ProcessTransactionAsync(userId, amount);
 
         result.Success.Should().BeTrue();
-        // Base creation (100) + Amount (100) = 200
         result.NewBalance.Should().Be(200); 
 
         var profile = await _db.PlayerProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == userId);
@@ -77,7 +72,6 @@ public class EconomyServiceTests
         var userId = "user2";
         var user = new ApplicationUser { Id = userId, UserName = "user2", Email = "user2@example.com" };
         _db.Users.Add(user);
-        // Explicitly add a profile with low funds
         _db.PlayerProfiles.Add(new PlayerProfile { UserId = userId, Coins = 50, User = user });
         await _db.SaveChangesAsync();
         _db.ChangeTracker.Clear();

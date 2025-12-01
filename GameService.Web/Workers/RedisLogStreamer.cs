@@ -17,15 +17,13 @@ public class RedisLogStreamer(
         PropertyNameCaseInsensitive = true,
         AllowTrailingCommas = true
     };
-    
-    // Throttle updates to max once per 500ms to prevent UI freezing at scale
+
     private static readonly TimeSpan ThrottleInterval = TimeSpan.FromMilliseconds(500);
     private readonly Channel<PlayerUpdatedMessage> _updateChannel = Channel.CreateBounded<PlayerUpdatedMessage>(
         new BoundedChannelOptions(100) { FullMode = BoundedChannelFullMode.DropOldest });
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Start the throttled consumer
         _ = Task.Run(() => ProcessUpdatesThrottledAsync(stoppingToken), stoppingToken);
         
         while (!stoppingToken.IsCancellationRequested)
@@ -50,7 +48,6 @@ public class RedisLogStreamer(
 
                         if (update != null)
                         {
-                            // Queue for throttled processing instead of immediate notify
                             _updateChannel.Writer.TryWrite(update);
                         }
                     }
@@ -85,7 +82,6 @@ public class RedisLogStreamer(
         {
             try
             {
-                // Try to read with timeout
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                 cts.CancelAfter(ThrottleInterval);
                 
@@ -95,17 +91,14 @@ public class RedisLogStreamer(
                     {
                         while (_updateChannel.Reader.TryRead(out var update))
                         {
-                            // Keep only the latest update per user (coalesce rapid updates)
                             pendingUpdates[update.UserId] = update;
                         }
                     }
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
                 {
-                    // Timeout reached, flush pending updates
                 }
-                
-                // Flush if we have updates and throttle interval passed
+
                 if (pendingUpdates.Count > 0 && (DateTime.UtcNow - lastFlush) >= ThrottleInterval)
                 {
                     foreach (var update in pendingUpdates.Values)

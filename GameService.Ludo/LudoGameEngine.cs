@@ -44,22 +44,19 @@ public sealed class LudoGameEngine : IGameEngine
         if (ctx == null) return [];
 
         var actions = new List<string>();
-        
-        // Check if it's this player's turn
+
         if (!ctx.Meta.PlayerSeats.TryGetValue(userId, out var seatIndex))
             return [];
             
         if (ctx.State.CurrentPlayer != seatIndex)
             return [];
 
-        // If no dice rolled yet, can roll
         if (ctx.State.LastDiceRoll == 0)
         {
             actions.Add("roll");
         }
         else
         {
-            // Get legal token moves
             var engine = new LudoEngine(ctx.State, _diceRoller);
             var moves = engine.GetLegalMoves();
             foreach (var tokenIndex in moves)
@@ -79,7 +76,6 @@ public sealed class LudoGameEngine : IGameEngine
         var engine = new LudoEngine(ctx.State, _diceRoller);
         var legalMoves = engine.GetLegalMoves();
 
-        // Convert tokens to array for JSON serialization
         var tokenArray = new byte[16];
         for (int i = 0; i < 16; i++)
         {
@@ -112,15 +108,13 @@ public sealed class LudoGameEngine : IGameEngine
             return GameActionResult.Error("Room not found");
 
         int seatIndex;
-        
-        // Admin bypass - use current player's seat
+
         if (userId == "ADMIN")
         {
             seatIndex = ctx.State.CurrentPlayer;
         }
         else
         {
-            // Validate player turn
             if (!ctx.Meta.PlayerSeats.TryGetValue(userId, out seatIndex))
                 return GameActionResult.Error("Player not in room");
 
@@ -133,7 +127,6 @@ public sealed class LudoGameEngine : IGameEngine
         if (!engine.TryRollDice(out var result))
             return GameActionResult.Error($"Cannot roll: {result.Status}");
 
-        // Save updated state
         await _repository.SaveAsync(roomId, engine.State, ctx.Meta);
 
         var events = new List<GameEvent>
@@ -141,7 +134,6 @@ public sealed class LudoGameEngine : IGameEngine
             new("DiceRolled", new { Value = result.DiceValue, Player = seatIndex })
         };
 
-        // If turn passed or forfeited, add turn change event
         if (result.Status == LudoStatus.TurnPassed || result.Status == LudoStatus.ForfeitTurn)
         {
             events.Add(new("TurnChanged", new { NewPlayer = engine.State.CurrentPlayer }));
@@ -167,8 +159,7 @@ public sealed class LudoGameEngine : IGameEngine
             return GameActionResult.Error("Room not found");
 
         int seatIndex;
-        
-        // Admin bypass - use current player's seat
+
         if (userId == "ADMIN")
         {
             seatIndex = ctx.State.CurrentPlayer;

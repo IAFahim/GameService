@@ -22,7 +22,6 @@ namespace GameService.ApiService;
 [JsonSerializable(typeof(PlayerChangeType))]
 [JsonSerializable(typeof(SupportedGameDto))]
 [JsonSerializable(typeof(List<SupportedGameDto>))]
-// Game core types
 [JsonSerializable(typeof(GameRoomDto))]
 [JsonSerializable(typeof(List<GameRoomDto>))]
 [JsonSerializable(typeof(GameRoomMeta))]
@@ -31,7 +30,6 @@ namespace GameService.ApiService;
 [JsonSerializable(typeof(GameEvent))]
 [JsonSerializable(typeof(List<GameEvent>))]
 [JsonSerializable(typeof(JoinRoomResult))]
-// Hub DTOs
 [JsonSerializable(typeof(CreateRoomResponse))]
 [JsonSerializable(typeof(JoinRoomResponse))]
 [JsonSerializable(typeof(PlayerJoinedEvent))]

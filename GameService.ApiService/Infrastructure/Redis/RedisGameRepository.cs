@@ -17,15 +17,13 @@ public sealed class RedisGameRepository<TState>(
     where TState : struct
 {
     private readonly IDatabase _db = redis.GetDatabase();
-    
-    // Use hash tags for Redis Cluster sharding - all keys for a room go to same shard
+
     private string StateKey(string roomId) => $"{{game:{gameType}}}:{roomId}:state";
     private string MetaKey(string roomId) => $"{{game:{gameType}}}:{roomId}:meta";
     private string LockKey(string roomId) => $"{{game:{gameType}}}:{roomId}:lock";
 
     public async Task<GameContext<TState>?> LoadAsync(string roomId)
     {
-        // Use batch for parallel fetch
         var batch = _db.CreateBatch();
         var stateTask = batch.StringGetAsync(StateKey(roomId));
         var metaTask = batch.StringGetAsync(MetaKey(roomId));
@@ -55,8 +53,7 @@ public sealed class RedisGameRepository<TState>(
         _ = batch.StringSetAsync(StateKey(roomId), stateBytes);
         _ = batch.StringSetAsync(MetaKey(roomId), metaJson);
         batch.Execute();
-        
-        // Ensure room is registered
+
         await roomRegistry.RegisterRoomAsync(roomId, gameType);
         
         logger.LogDebug("Saved game state for room {RoomId}", roomId);

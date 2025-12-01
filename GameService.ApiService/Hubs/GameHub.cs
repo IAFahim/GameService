@@ -84,8 +84,7 @@ public class GameHub(
 
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
         await Clients.Group(roomId).SendAsync("PlayerJoined", new PlayerJoinedEvent(UserId, UserName, result.SeatIndex));
-        
-        // Send current game state to the joining player
+
         var engine = serviceProvider.GetKeyedService<IGameEngine>(gameType);
         if (engine != null)
         {
@@ -139,7 +138,6 @@ public class GameHub(
             return GameActionResult.Error("Game engine not available");
         }
 
-        // Acquire distributed lock to prevent race conditions
         if (!await roomRegistry.TryAcquireLockAsync(roomId, TimeSpan.FromSeconds(2)))
         {
             return GameActionResult.Error("Game is busy. Please retry.");
@@ -150,13 +148,11 @@ public class GameHub(
             var command = new GameCommand(UserId, actionName, payload);
             var result = await engine.ExecuteAsync(roomId, command);
 
-            // Broadcast state if the action was successful and should broadcast
             if (result.Success && result.ShouldBroadcast && result.NewState != null)
             {
                 await Clients.Group(roomId).SendAsync("GameState", result.NewState);
             }
 
-            // Broadcast individual events
             foreach (var evt in result.Events)
             {
                 await Clients.Group(roomId).SendAsync(evt.EventName, evt.Data);
@@ -211,7 +207,6 @@ public class GameHub(
     }
 }
 
-// Hub DTOs
 public sealed record CreateRoomResponse(bool Success, string? RoomId, string? ErrorMessage);
 public sealed record JoinRoomResponse(bool Success, int SeatIndex, string? ErrorMessage);
 public sealed record PlayerJoinedEvent(string UserId, string UserName, int SeatIndex);

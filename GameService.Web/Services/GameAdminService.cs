@@ -68,4 +68,16 @@ public class GameAdminService(HttpClient http)
         var response = await http.PostAsJsonAsync("/admin/games", new { GameType = gameType, PlayerCount = playerCount });
         response.EnsureSuccessStatusCode();
     }
+    
+    public async Task<System.Text.Json.JsonElement?> GetLuckyMineFullStateAsync(string roomId)
+    {
+        try 
+        {
+            return await http.GetFromJsonAsync<System.Text.Json.JsonElement>($"/admin/luckymine/{roomId}/state");
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }

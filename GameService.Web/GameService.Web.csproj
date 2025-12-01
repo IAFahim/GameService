@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\GameService.LuckyMine\GameService.LuckyMine.csproj" />
         <ProjectReference Include="..\GameService.ServiceDefaults\GameService.ServiceDefaults.csproj" />
         <ProjectReference Include="..\GameService.Ludo\GameService.Ludo.csproj" />
         <ProjectReference Include="..\GameService.GameCore\GameService.GameCore.csproj" />

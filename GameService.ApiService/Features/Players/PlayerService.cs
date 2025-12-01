@@ -17,7 +17,6 @@ public class PlayerService(GameDbContext db) : IPlayerService
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
-        // GET operations should be idempotent - no side effects
         return profile is not null 
             ? new PlayerProfileResponse(profile.UserId, profile.Coins) 
             : null;

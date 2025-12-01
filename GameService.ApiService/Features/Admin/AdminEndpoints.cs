@@ -15,13 +15,11 @@ public static class AdminEndpoints
     {
         var group = app.MapGroup("/admin").RequireAuthorization("AdminPolicy");
 
-        // Game management - now with O(1) lookups
         group.MapPost("/games", CreateGame);
         group.MapGet("/games", GetGames);
         group.MapGet("/games/{roomId}", GetGameState);
         group.MapDelete("/games/{roomId}", DeleteGame);
-        
-        // Player management
+
         group.MapGet("/players", GetPlayers);
         group.MapPost("/players/{userId}/coins", UpdatePlayerCoins);
         group.MapDelete("/players/{userId}", DeletePlayer);
@@ -35,7 +33,6 @@ public static class AdminEndpoints
         IServiceProvider sp,
         IRoomRegistry registry)
     {
-        // O(1) lookup using keyed service
         var roomService = sp.GetKeyedService<IGameRoomService>(req.GameType);
         if (roomService == null)
         {
@@ -54,14 +51,12 @@ public static class AdminEndpoints
         IServiceProvider sp,
         IRoomRegistry registry)
     {
-        // O(1) lookup: What game type is this room?
         var gameType = await registry.GetGameTypeAsync(roomId);
         if (gameType == null)
         {
             return Results.NotFound($"Room '{roomId}' not found");
         }
 
-        // O(1) lookup: Get the correct engine
         var engine = sp.GetKeyedService<IGameEngine>(gameType);
         if (engine == null)
         {
@@ -106,14 +101,12 @@ public static class AdminEndpoints
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
-        // Limit page size to prevent abuse
         if (pageSize > 100) pageSize = 100;
         if (pageSize < 1) pageSize = 50;
         if (page < 1) page = 1;
 
         var allGames = new List<GameRoomDto>();
-        
-        // If gameType specified, only fetch that type (recommended for large scale)
+
         var modulesToQuery = string.IsNullOrEmpty(gameType) 
             ? modules 
             : modules.Where(m => m.GameName.Equals(gameType, StringComparison.OrdinalIgnoreCase));
@@ -123,7 +116,6 @@ public static class AdminEndpoints
             var engine = sp.GetKeyedService<IGameEngine>(module.GameName);
             if (engine == null) continue;
 
-            // Use paginated fetch with cursor
             var cursor = (long)(page - 1) * pageSize;
             var (roomIds, _) = await registry.GetRoomIdsPagedAsync(module.GameName, cursor, pageSize);
 
@@ -141,8 +133,7 @@ public static class AdminEndpoints
                         state.Meta.PlayerSeats
                     ));
                 }
-                
-                // Stop if we've reached the page size
+
                 if (allGames.Count >= pageSize) break;
             }
             

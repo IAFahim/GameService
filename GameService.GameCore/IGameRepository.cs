@@ -34,7 +34,6 @@ public interface IGameRepositoryFactory
 /// </summary>
 public interface IGameState
 {
-    // Marker interface - all game states must be structs
 }
 
 /// <summary>

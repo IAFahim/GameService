@@ -29,7 +29,6 @@ builder.AddNpgsqlDbContext<GameDbContext>("postgresdb", configureDbContextOption
         options.EnableSensitiveDataLogging();
 });
 
-// Authentication & Authorization
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityUserAccessor>();
 builder.Services.AddScoped<IdentityRedirectManager>();

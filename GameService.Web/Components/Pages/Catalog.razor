@@ -46,12 +46,10 @@
                     <button type="button" class="btn-close" @onclick="CloseModal"></button>
                 </div>
                 <div class="modal-body">
-                    <label class="form-label">Max Players</label>
-                    <select class="form-select" @bind="playerCount">
-                        <option value="2">2 Players</option>
-                        <option value="3">3 Players</option>
-                        <option value="4">4 Players</option>
-                    </select>
+                    <!-- FIX: Allow 1 to 20 players -->
+                    <label class="form-label">Player Capacity (Max 20)</label>
+                    <input type="number" class="form-control" @bind="playerCount" min="1" max="20" />
+                    <div class="form-text">Supports up to 20 players for Lucky Mine.</div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
@@ -66,13 +64,17 @@
     private List<SupportedGameDto>? games;
     private bool showModal = false;
     private string selectedGame = "";
-    private int playerCount = 4;
+    private int playerCount = 20; // Default to max for massive battles
 
     protected override async Task OnInitializedAsync() => games = await AdminService.GetSupportedGamesAsync();
 
     private void OpenCreateModal(string gameName)
     {
         selectedGame = gameName;
+        // Smart defaults based on game type
+        if (gameName == "LuckyMine") playerCount = 20;
+        else playerCount = 4;
+        
         showModal = true;
     }
 
@@ -80,8 +82,12 @@
 
     private async Task CreateGame()
     {
+        // Enforce limits
+        if (playerCount < 1) playerCount = 1;
+        if (playerCount > 20) playerCount = 20;
+
         await AdminService.CreateGameAsync(selectedGame, playerCount);
         showModal = false;
-        Nav.NavigateTo("games"); // Redirect to Active Games list
+        Nav.NavigateTo("games");
     }
 }

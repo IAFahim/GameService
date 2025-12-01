@@ -12,8 +12,6 @@ public static class GameServiceExtensions
     /// </summary>
     public static IServiceCollection AddGamePlatform(this IServiceCollection services)
     {
-        // Infrastructure services are registered here
-        // IRoomRegistry implementation will be added in the infrastructure layer
         return services;
     }
     
@@ -24,11 +22,9 @@ public static class GameServiceExtensions
         where TModule : IGameModule, new()
     {
         var module = new TModule();
-        
-        // Register the module itself
+
         services.AddSingleton<IGameModule>(module);
-        
-        // Let the module register its services (with keyed registration)
+
         module.RegisterServices(services);
         
         return services;

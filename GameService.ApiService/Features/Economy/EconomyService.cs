@@ -93,7 +93,6 @@ public class EconomyService(GameDbContext db, IGameEventPublisher publisher) : I
         }
         catch (DbUpdateException) when (retryCount < MaxRetries)
         {
-            // Race condition on insert - another thread created the profile, retry
             db.ChangeTracker.Clear();
             return await ProcessTransactionInternalAsync(userId, amount, retryCount + 1);
         }

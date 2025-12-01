@@ -7,6 +7,8 @@
 @using GameService.Ludo
 @using GameService.GameCore
 @using GameService.Web.Components.Ludo
+@using GameService.LuckyMine
+@using GameService.Web.Components.LuckyMine
 
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -27,8 +29,12 @@
     }
     else if (ludoState != null)
     {
-        <!-- RENDER THE VISUAL PANEL FOR LUDO -->
         <LudoAdminPanel RoomId="@RoomId" State="ludoState" OnRefresh="LoadGame" />
+    }
+    else if (luckyMineState != null)
+    {
+        <!-- Pass the FULL Dto here -->
+        <LuckyMineAdminPanel Dto="luckyMineState" />
     }
     else if (!string.IsNullOrEmpty(rawJson))
     {
@@ -48,11 +54,14 @@
 
 @code {
     [Parameter] public string RoomId { get; set; } = "";
-    
+
     private bool isLoading = true;
     private string? gameType;
     private string? rawJson;
     private LudoStateDto? ludoState;
+
+    private LuckyMineFullDto? luckyMineState;
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -69,9 +78,6 @@
             var json = await AdminService.GetGameStateAsync(RoomId);
             if (json.HasValue)
             {
-                rawJson = json.Value.GetRawText();
-                
-                // Check GameType from Meta
                 if (json.Value.TryGetProperty("meta", out var metaProp) && 
                     metaProp.TryGetProperty("gameType", out var typeProp))
                 {
@@ -81,6 +87,20 @@
                 if (string.Equals(gameType, "Ludo", StringComparison.OrdinalIgnoreCase))
                 {
                     ludoState = MapToLudoState(json.Value);
+                }
+                else if (string.Equals(gameType, "LuckyMine", StringComparison.OrdinalIgnoreCase))
+                {
+                    var fullStateJson = await AdminService.GetLuckyMineFullStateAsync(RoomId);
+                    if (fullStateJson.HasValue)
+                    {
+                        luckyMineState = JsonSerializer.Deserialize<LuckyMineFullDto>(
+                            fullStateJson.Value.GetRawText(), 
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    }
+                }
+                else
+                {
+                    rawJson = json.Value.GetRawText();
                 }
             }
         }
@@ -126,12 +146,12 @@
                 LastDiceRoll = stateEl.GetProperty("lastDiceRoll").GetInt32(),
                 TurnId = stateEl.GetProperty("turnId").GetInt32(),
                 Winner = stateEl.GetProperty("winner").GetInt32(),
-                ActiveSeatsBinary = stateEl.TryGetProperty("activeSeatsBinary", out var asb) 
-                    ? asb.GetString() ?? "0000" 
+                ActiveSeatsBinary = stateEl.TryGetProperty("activeSeatsBinary", out var asb)
+                    ? asb.GetString() ?? "0000"
                     : "0000",
                 Tokens = tokens,
-                ConsecutiveSixes = stateEl.TryGetProperty("consecutiveSixes", out var cs) 
-                    ? cs.GetInt32() 
+                ConsecutiveSixes = stateEl.TryGetProperty("consecutiveSixes", out var cs)
+                    ? cs.GetInt32()
                     : 0
             };
         }
@@ -141,10 +161,11 @@
             return null;
         }
     }
-    
+
     private async Task DeleteGame()
     {
         await AdminService.DeleteGameAsync(RoomId);
         Nav.NavigateTo("games");
     }
+
 }

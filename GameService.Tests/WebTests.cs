@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection; // Ensure this usage exists for ConfigureHttpClientDefaults
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GameService.Tests;
 
@@ -21,7 +21,6 @@ public class WebTests
             logging.AddFilter("Aspire.", LogLevel.Debug);
         });
 
-        // FIX: Configure HTTP client to ignore SSL errors in CI/Test environment
         appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();

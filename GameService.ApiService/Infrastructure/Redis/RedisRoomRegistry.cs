@@ -9,14 +9,11 @@ namespace GameService.ApiService.Infrastructure.Redis;
 public sealed class RedisRoomRegistry(IConnectionMultiplexer redis, ILogger<RedisRoomRegistry> logger) : IRoomRegistry
 {
     private readonly IDatabase _db = redis.GetDatabase();
-    
-    // Global registry for all rooms: Hash of RoomId → GameType
+
     private const string GlobalRegistryKey = "global:room_registry";
-    
-    // Per-game-type sets for listing rooms by type
+
     private static string GameTypeRoomsKey(string gameType) => $"rooms:by_type:{gameType}";
-    
-    // Distributed lock key for room operations
+
     private static string LockKey(string roomId) => $"lock:room:{roomId}";
 
     public async Task<string?> GetGameTypeAsync(string roomId)
@@ -28,22 +25,19 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis, ILogger<Redi
     public async Task RegisterRoomAsync(string roomId, string gameType)
     {
         var batch = _db.CreateBatch();
-        
-        // Add to global registry
+
         _ = batch.HashSetAsync(GlobalRegistryKey, roomId, gameType);
-        
-        // Add to game-type-specific set
+
         _ = batch.SetAddAsync(GameTypeRoomsKey(gameType), roomId);
         
         batch.Execute();
-        await Task.CompletedTask; // Batch is fire-and-forget, but we wait for consistency
-        
+        await Task.CompletedTask;
+
         logger.LogDebug("Registered room {RoomId} for game type {GameType}", roomId, gameType);
     }
 
     public async Task UnregisterRoomAsync(string roomId)
     {
-        // First get the game type so we can remove from the type-specific set
         var gameType = await GetGameTypeAsync(roomId);
         if (gameType == null)
         {
@@ -51,11 +45,9 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis, ILogger<Redi
         }
 
         var batch = _db.CreateBatch();
-        
-        // Remove from global registry
+
         _ = batch.HashDeleteAsync(GlobalRegistryKey, roomId);
-        
-        // Remove from game-type-specific set
+
         _ = batch.SetRemoveAsync(GameTypeRoomsKey(gameType), roomId);
         
         batch.Execute();
@@ -77,14 +69,10 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis, ILogger<Redi
 
     public async Task<(IReadOnlyList<string> RoomIds, long NextCursor)> GetRoomIdsPagedAsync(string gameType, long cursor = 0, int pageSize = 50)
     {
-        // Use SSCAN for paginated iteration - O(1) per page, not O(N)
         var result = await _db.SetScanAsync(GameTypeRoomsKey(gameType), cursor: cursor, pageSize: pageSize).ToArrayAsync();
-        
-        // Get the cursor for next page (0 means end of set)
+
         var roomIds = result.Select(m => m.ToString()).ToList();
-        
-        // For proper cursor handling, we use SetScan which returns entries
-        // The cursor is implicit in the enumeration - we return the count as a simple cursor
+
         var nextCursor = roomIds.Count == pageSize ? cursor + pageSize : 0;
         
         return (roomIds, nextCursor);

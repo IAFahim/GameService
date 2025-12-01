@@ -189,8 +189,8 @@
 
     private double GetProgressPercent(int pos)
     {
-        if (pos == 0) return 0; // Base
-        if (pos >= 57) return 100; // Home
+        if (pos == 0) return 0;
+        if (pos >= 57) return 100;
         return (pos / 57.0) * 100;
     }
 
@@ -199,16 +199,12 @@
 
     private bool IsSeatActive(int p)
     {
-        // Convert binary string back to check bit
         if (string.IsNullOrEmpty(State.ActiveSeatsBinary)) return false;
-        // String is like "1111" or "0101". It's padded left.
-        // P0 is LSB (last char), P3 is MSB (first char)
-        // Actually LudoCore uses `(ActiveSeats & (1 << CurrentPlayer))`
-        // We need to parse the integer from the string or rely on binary string indexing
+
         try 
         {
-            var activeMask = Convert.ToInt32(State.ActiveSeatsBinary, 2);
-            return (activeMask & (1 << p)) != 0;
+            var mask = Convert.ToInt32(State.ActiveSeatsBinary, 2);
+            return (mask & (1 << p)) != 0;
         }
         catch { return false; }
     }
@@ -218,11 +214,10 @@
         if (State.LastDiceRoll == 0 || State.CurrentPlayer != player) return false;
         
         int currentPos = GetTokenPos(player, tokenIndex);
-        
-        // Rules logic (Simplified for UI display)
-        if (currentPos == 0) return State.LastDiceRoll == 6; // Need 6 to exit base
-        if (currentPos == 57) return false; // Already home
-        return (currentPos + State.LastDiceRoll) <= 57; // Can't overshoot home
+
+        if (currentPos == 0) return State.LastDiceRoll == 6;
+        if (currentPos == 57) return false;
+        return (currentPos + State.LastDiceRoll) <= 57;
     }
 
     private bool HasAnyLegalMove()
@@ -231,7 +226,6 @@
         return false;
     }
 
-    // Actions
     private async Task DoForceRoll()
     {
         await ExecuteSafe(async () => await AdminService.PlayLudoRollAsync(RoomId));
@@ -244,7 +238,7 @@
     
     private async Task DoRefresh()
     {
-        await ExecuteSafe(async () => await Task.CompletedTask); // Just triggers finally block refresh
+        await ExecuteSafe(async () => await Task.CompletedTask);
     }
 
     private async Task ExecuteSafe(Func<Task> action)

@@ -12,7 +12,9 @@ using System.Threading.RateLimiting;
 using GameService.ServiceDefaults;
 using GameService.ApiService.Features.Common;
 using GameService.ApiService.Features.Admin;
+using GameService.ApiService.Infrastructure;
 using GameService.GameCore;
+using GameService.LuckyMine;
 using GameService.Ludo;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,19 +23,14 @@ builder.AddServiceDefaults();
 builder.AddNpgsqlDbContext<GameDbContext>("postgresdb");
 builder.AddRedisClient("cache");
 
-// ============================================================================
-// JSON Serialization - Chain all game JSON contexts for AOT compatibility
-// ============================================================================
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, GameJsonContext.Default);
     options.SerializerOptions.TypeInfoResolverChain.Insert(1, LudoJsonContext.Default);
+    options.SerializerOptions.TypeInfoResolverChain.Insert(2, LuckyMineJsonContext.Default);
     options.SerializerOptions.PropertyNameCaseInsensitive = true;
 });
 
-// ============================================================================
-// CORS - TODO: Restrict in production
-// ============================================================================
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -46,7 +43,6 @@ builder.Services.AddCors(options =>
         }
         else
         {
-            // Production: specify allowed origins
             policy.WithOrigins("https://yourdomain.com")
                   .AllowAnyHeader()
                   .AllowAnyMethod()
@@ -55,9 +51,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ============================================================================
-// Rate Limiting
-// ============================================================================
 builder.Services.AddRateLimiter(options =>
 {
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
@@ -72,9 +65,6 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
-// ============================================================================
-// Authentication & Authorization
-// ============================================================================
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminPolicy", policy => policy.RequireRole("Admin"));
@@ -94,40 +84,23 @@ builder.Services.Configure<IdentityOptions>(options =>
 
 builder.Services.AddScoped<IPasswordHasher<ApplicationUser>, Argon2PasswordHasher>();
 
-// ============================================================================
-// Game Platform Infrastructure - O(1) lookups via keyed services
-// ============================================================================
-
-// Core infrastructure
 builder.Services.AddSingleton<IRoomRegistry, RedisRoomRegistry>();
 builder.Services.AddSingleton<IGameRepositoryFactory, RedisGameRepositoryFactory>();
 builder.Services.AddSingleton<IGameEventPublisher, RedisGameEventPublisher>();
+builder.Services.AddSingleton<IGameBroadcaster, HubGameBroadcaster>();
 
-// Application services
 builder.Services.AddScoped<IPlayerService, PlayerService>();
 builder.Services.AddScoped<IEconomyService, EconomyService>();
 
-// ============================================================================
-// Game Modules - Explicit registration (AOT-safe, no reflection)
-// Each module registers its engine and room service with keyed DI
-// ============================================================================
 builder.Services.AddGameModule<LudoModule>();
-// Future games:
-// builder.Services.AddGameModule<ChessModule>();
-// builder.Services.AddGameModule<PokerModule>();
+builder.Services.AddGameModule<LuckyMineModule>();
 
-// ============================================================================
-// SignalR with Redis backplane
-// ============================================================================
 builder.Services.AddSignalR()
     .AddStackExchangeRedis(builder.Configuration.GetConnectionString("cache") ?? throw new InvalidOperationException("Redis connection string is missing"))
     .AddJsonProtocol();
 
 var app = builder.Build();
 
-// ============================================================================
-// Middleware Pipeline
-// ============================================================================
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
     app.MapOpenApi();
@@ -139,7 +112,6 @@ app.UseRateLimiter();
 
 app.UseAuthentication();
 
-// Admin API key authentication middleware
 app.Use(async (context, next) =>
 {
     var apiKey = context.Request.Headers["X-Admin-Key"].FirstOrDefault();
@@ -156,21 +128,14 @@ app.Use(async (context, next) =>
 
 app.UseAuthorization();
 
-// ============================================================================
-// Endpoint Mapping
-// ============================================================================
-
-// Core endpoints
 app.MapAuthEndpoints();
 app.MapPlayerEndpoints();
 app.MapEconomyEndpoints();
 app.MapAdminEndpoints();
 GameService.ApiService.Features.Games.GameCatalogEndpoints.MapGameCatalogEndpoints(app);
 
-// Unified game hub - single endpoint for ALL games
 app.MapHub<GameHub>("/hubs/game");
 
-// Game-specific admin endpoints (god mode controls)
 foreach (var module in app.Services.GetServices<IGameModule>())
 {
     module.MapEndpoints(app);

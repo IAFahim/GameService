@@ -18,47 +18,56 @@ public sealed class LudoModule : IGameModule
 
     public void RegisterServices(IServiceCollection services)
     {
-        // Register with keyed services for O(1) lookup
         services.AddKeyedSingleton<IGameEngine, LudoGameEngine>(GameName);
         services.AddKeyedSingleton<IGameRoomService, LudoRoomService>(GameName);
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
     {
-        // Admin endpoints for Ludo-specific god mode controls
         var admin = endpoints.MapGroup("/admin/ludo").RequireAuthorization("AdminPolicy");
 
         admin.MapPost("/{roomId}/roll", async (
             string roomId, 
-            IServiceProvider sp) =>
+            IServiceProvider sp,
+            IGameBroadcaster broadcaster) =>
         {
             var engine = sp.GetKeyedService<IGameEngine>(GameName);
-            if (engine == null)
-                return Results.NotFound("Ludo engine not available");
+            if (engine == null) return Results.NotFound("Ludo engine not available");
 
-            // Admin bypass - execute as current player
             var command = new GameCommand("ADMIN", "roll", default);
             var result = await engine.ExecuteAsync(roomId, command);
             
-            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+            if (result.Success)
+            {
+                await broadcaster.BroadcastResultAsync(roomId, result);
+                return Results.Ok(result);
+            }
+            
+            return Results.BadRequest(result);
         });
 
         admin.MapPost("/{roomId}/move/{tokenIndex:int}", async (
             string roomId, 
             int tokenIndex,
-            IServiceProvider sp) =>
+            IServiceProvider sp,
+            IGameBroadcaster broadcaster) =>
         {
             var engine = sp.GetKeyedService<IGameEngine>(GameName);
-            if (engine == null)
-                return Results.NotFound("Ludo engine not available");
+            if (engine == null) return Results.NotFound("Ludo engine not available");
 
             var payload = System.Text.Json.JsonDocument.Parse($"{{\"tokenIndex\":{tokenIndex}}}").RootElement;
             var command = new GameCommand("ADMIN", "move", payload);
             var result = await engine.ExecuteAsync(roomId, command);
             
-            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+            if (result.Success)
+            {
+                await broadcaster.BroadcastResultAsync(roomId, result);
+                return Results.Ok(result);
+            }
+            
+            return Results.BadRequest(result);
         });
-
+        
         admin.MapGet("/{roomId}/state", async (
             string roomId,
             IServiceProvider sp) =>

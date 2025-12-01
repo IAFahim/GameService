@@ -4,7 +4,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
 using GameService.ApiService.Hubs;
 using Microsoft.AspNetCore.SignalR.Client;
-using Microsoft.Extensions.DependencyInjection; // Required for ConfigureHttpClientDefaults
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GameService.Tests;
 
@@ -20,7 +20,6 @@ public class GameFlowTests
 
         var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.GameService_AppHost>(cancellationToken);
 
-        // FIX: Configure HTTP client to ignore SSL errors in CI/Test environment
         appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
@@ -50,8 +49,7 @@ public class GameFlowTests
         Assert.That(accessToken, Is.Not.Null);
 
         var hubUrl = new Uri(httpClient.BaseAddress!, "/hubs/game").ToString();
-        
-        // FIX: Configure SignalR to trust the dev certificate as well
+
         var connection = new HubConnectionBuilder()
             .WithUrl(hubUrl, options =>
             {

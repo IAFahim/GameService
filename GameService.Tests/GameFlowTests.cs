@@ -53,7 +53,7 @@ public class GameFlowTests
         var connection = new HubConnectionBuilder()
             .WithUrl(hubUrl, options =>
             {
-                options.AccessTokenProvider = () => Task.FromResult(accessToken!);
+                options.AccessTokenProvider = () => Task.FromResult<string?>(accessToken);
                 options.HttpMessageHandlerFactory = (handler) =>
                 {
                     if (handler is HttpClientHandler clientHandler)
@@ -68,7 +68,7 @@ public class GameFlowTests
         await connection.StartAsync(cancellationToken).WaitAsync(Timeout, cancellationToken);
 
         var createResponse = await connection.InvokeAsync<CreateRoomResponse>(
-            "CreateRoom", "Ludo", 4, cancellationToken);
+            "CreateRoom", "Ludo", 4, 0L, (string?)null, cancellationToken);
 
         Assert.That(createResponse.Success, Is.True);
         Assert.That(createResponse.RoomId, Is.Not.Null.And.Not.Empty);

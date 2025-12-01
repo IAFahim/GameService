@@ -87,6 +87,7 @@ public class EconomyService(GameDbContext db, IGameEventPublisher publisher) : I
                 }
                 catch (Exception ex)
                 {
+                    await transaction.RollbackAsync();
                     return new TransactionResult(false, 0, TransactionErrorType.Unknown, ex.Message);
                 }
             });

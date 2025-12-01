@@ -10,7 +10,7 @@ public class GameDbContext(DbContextOptions<GameDbContext> options, IGameEventPu
     : IdentityDbContext<ApplicationUser>(options)
 {
     public DbSet<PlayerProfile> PlayerProfiles => Set<PlayerProfile>();
-    public DbSet<GameRoomTemplate> RoomTemplates => Set<GameRoomTemplate>(); // NEW
+    public DbSet<GameRoomTemplate> RoomTemplates => Set<GameRoomTemplate>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -27,8 +27,7 @@ public class GameDbContext(DbContextOptions<GameDbContext> options, IGameEventPu
         builder.Entity<PlayerProfile>()
             .HasIndex(p => p.UserId)
             .IsUnique();
-            
-        // Default Templates Seeding
+
         builder.Entity<GameRoomTemplate>().HasData(
             new GameRoomTemplate { Id = 1, Name = "Classic Ludo (4P)", GameType = "Ludo", MaxPlayers = 4, EntryFee = 100 },
             new GameRoomTemplate { Id = 2, Name = "1v1 Ludo", GameType = "Ludo", MaxPlayers = 2, EntryFee = 500 },
@@ -120,5 +119,5 @@ public class GameRoomTemplate
     public required string GameType { get; set; }
     public int MaxPlayers { get; set; } = 4;
     public long EntryFee { get; set; } = 0;
-    public string? ConfigJson { get; set; } // Game specific settings (JSON)
+    public string? ConfigJson { get; set; }
 }

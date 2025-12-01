@@ -40,7 +40,6 @@ public class GameHub(
     /// <param name="templateName">The unique name of the room template (e.g., "StandardLudo", "99Mines")</param>
     public async Task<CreateRoomResponse> CreateRoom(string templateName)
     {
-        // 1. Resolve Database to fetch Template Configuration
         using var scope = serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GameDbContext>();
 
@@ -53,60 +52,66 @@ public class GameHub(
             return new CreateRoomResponse(false, null, $"Room type '{templateName}' not found.");
         }
 
-        // 2. Resolve the specific Game Service (Ludo, LuckyMine, etc.)
-        var roomService = serviceProvider.GetKeyedService<IGameRoomService>(template.GameType);
+        return await CreateRoomInternal(template.GameType, template.MaxPlayers, template.EntryFee, template.ConfigJson);
+    }
+
+    private async Task<CreateRoomResponse> CreateRoomInternal(string gameType, int maxPlayers, long entryFee, string? configJson)
+    {
+        if (string.IsNullOrWhiteSpace(gameType))
+            return new CreateRoomResponse(false, null, "Game type is required.");
+        
+        if (maxPlayers < 1 || maxPlayers > 100)
+            return new CreateRoomResponse(false, null, "Max players must be between 1 and 100.");
+
+        var roomService = serviceProvider.GetKeyedService<IGameRoomService>(gameType);
         if (roomService == null)
         {
-            return new CreateRoomResponse(false, null, $"System error: Game type '{template.GameType}' is not registered.");
+            return new CreateRoomResponse(false, null, $"Game type '{gameType}' is not supported.");
         }
 
         try
         {
-            // 3. Prepare Configuration from Template
-            // This maps the SQL Template entity to the internal GameRoomMeta
             var configDict = new Dictionary<string, string>();
-            if (!string.IsNullOrEmpty(template.ConfigJson))
+            if (!string.IsNullOrEmpty(configJson))
             {
                 try 
                 {
-                    var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(template.ConfigJson);
+                    var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(configJson);
                     if (dict != null)
                     {
                         foreach (var kvp in dict) 
-                            configDict[kvp.Key] = kvp.Value.ToString() ?? "";
+                            configDict[kvp.Key] = kvp.Value?.ToString() ?? "";
                     }
                 } 
-                catch (JsonException) 
+                catch (JsonException ex) 
                 { 
-                    logger.LogWarning("Invalid JSON config for template {Template}", templateName);
+                    logger.LogWarning(ex, "Invalid JSON config for game type {GameType}", gameType);
+                    return new CreateRoomResponse(false, null, "Invalid configuration JSON format.");
                 }
             }
 
             var meta = new GameRoomMeta
             {
-                GameType = template.GameType,
-                MaxPlayers = template.MaxPlayers,
-                EntryFee = template.EntryFee,
+                GameType = gameType,
+                MaxPlayers = maxPlayers,
+                EntryFee = entryFee,
                 Config = configDict,
                 IsPublic = true,
-                // The creator is automatically added to seat 0 (if logic permits)
                 PlayerSeats = new Dictionary<string, int> { [UserId] = 0 } 
             };
 
-            // 4. Create the Room
-            // The service will generate the short ID and apply specific rules (like Mine count) based on 'meta'
             var roomId = await roomService.CreateRoomAsync(meta);
             
-            // 5. SignalR Setup
             await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
             
-            logger.LogInformation("Room {RoomId} created using template {Template} by {UserId}", roomId, templateName, UserId);
+            logger.LogInformation("Room {RoomId} created (Type: {GameType}, MaxPlayers: {MaxPlayers}) by {UserId}", 
+                roomId, gameType, maxPlayers, UserId);
             
             return new CreateRoomResponse(true, roomId, null);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to create room with template {Template}", templateName);
+            logger.LogError(ex, "Failed to create room for game type {GameType}", gameType);
             return new CreateRoomResponse(false, null, "An unexpected error occurred while creating the room.");
         }
     }
@@ -116,34 +121,28 @@ public class GameHub(
     /// </summary>
     public async Task<JoinRoomResponse> JoinRoom(string roomId)
     {
-        // 1. Find which game type this room belongs to (O(1) Redis lookup)
         var gameType = await roomRegistry.GetGameTypeAsync(roomId);
         if (gameType == null)
         {
             return new JoinRoomResponse(false, -1, "Room not found");
         }
 
-        // 2. Get the correct service
         var roomService = serviceProvider.GetKeyedService<IGameRoomService>(gameType);
         if (roomService == null)
         {
             return new JoinRoomResponse(false, -1, "Game type not supported");
         }
 
-        // 3. Attempt to join via the Game Service (handles seats, locking, persistence)
         var result = await roomService.JoinRoomAsync(roomId, UserId);
         if (!result.Success)
         {
             return new JoinRoomResponse(false, -1, result.ErrorMessage);
         }
 
-        // 4. SignalR Setup & Broadcasting
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
-        
-        // Notify others
+
         await Clients.Group(roomId).SendAsync("PlayerJoined", new PlayerJoinedEvent(UserId, UserName, result.SeatIndex));
 
-        // 5. Send current Game State to the joining player immediately
         var engine = serviceProvider.GetKeyedService<IGameEngine>(gameType);
         if (engine != null)
         {
@@ -197,7 +196,6 @@ public class GameHub(
             return GameActionResult.Error("Game engine not available");
         }
 
-        // Distributed Lock to prevent race conditions on game state
         if (!await roomRegistry.TryAcquireLockAsync(roomId, TimeSpan.FromSeconds(2)))
         {
             return GameActionResult.Error("Game is busy. Please retry.");
@@ -208,19 +206,16 @@ public class GameHub(
             var command = new GameCommand(UserId, actionName, payload);
             var result = await engine.ExecuteAsync(roomId, command);
 
-            // Broadcast State Update if the state changed
             if (result.Success && result.ShouldBroadcast && result.NewState != null)
             {
                 await Clients.Group(roomId).SendAsync("GameState", result.NewState);
             }
 
-            // Broadcast specific events (e.g., "DiceRolled", "PlayerEliminated")
             foreach (var evt in result.Events)
             {
                 await Clients.Group(roomId).SendAsync(evt.EventName, evt.Data);
             }
 
-            // If action failed, notify only the caller
             if (!result.Success)
             {
                 await Clients.Caller.SendAsync("ActionError", new ActionErrorEvent(actionName, result.ErrorMessage ?? "Unknown error"));
@@ -264,7 +259,6 @@ public class GameHub(
     }
 }
 
-// SignalR DTOs
 public sealed record CreateRoomResponse(bool Success, string? RoomId, string? ErrorMessage);
 public sealed record JoinRoomResponse(bool Success, int SeatIndex, string? ErrorMessage);
 public sealed record PlayerJoinedEvent(string UserId, string UserName, int SeatIndex);

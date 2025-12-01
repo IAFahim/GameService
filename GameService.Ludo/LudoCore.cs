@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using GameService.GameCore;
 
 namespace GameService.Ludo;
 
@@ -23,7 +24,7 @@ public struct TokenBuffer
 }
 
 [StructLayout(LayoutKind.Explicit, Size = 28)]
-public struct LudoState
+public struct LudoState : IGameState
 {
     [FieldOffset(0)] public TokenBuffer Tokens;
     [FieldOffset(16)] public byte CurrentPlayer;

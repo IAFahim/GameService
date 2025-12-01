@@ -8,8 +8,7 @@ public static class GameCatalogEndpoints
     public static void MapGameCatalogEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/games/supported", GetSupportedGames)
-           .WithName("GetSupportedGames")
-           .WithOpenApi();
+           .WithName("GetSupportedGames");
     }
 
     private static IResult GetSupportedGames(IEnumerable<IGameModule> modules)

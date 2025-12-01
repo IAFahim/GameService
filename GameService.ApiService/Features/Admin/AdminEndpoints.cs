@@ -12,7 +12,6 @@ namespace GameService.ApiService.Features.Admin;
 
 public static class AdminEndpoints
 {
-    // ... MapAdminEndpoints (Keep existing mappings) ...
     public static void MapAdminEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/admin").RequireAuthorization("AdminPolicy");
@@ -32,7 +31,6 @@ public static class AdminEndpoints
         group.MapDelete("/players/{userId}", DeletePlayer);
     }
 
-    // ... GetTemplates, CreateTemplate, DeleteTemplate (Keep existing) ...
     private static async Task<IResult> GetTemplates(GameDbContext db)
     {
         var templates = await db.RoomTemplates.AsNoTracking().ToListAsync();
@@ -53,8 +51,6 @@ public static class AdminEndpoints
         return Results.Ok();
     }
 
-    // --- Game Creation Logic ---
-
     private static async Task<IResult> CreateGameFromTemplate(
         [FromBody] CreateRoomFromTemplateRequest req,
         GameDbContext db,
@@ -70,7 +66,6 @@ public static class AdminEndpoints
         [FromBody] CreateGameRequest req,
         IServiceProvider sp)
     {
-        // Use the provided EntryFee and ConfigJson from the request
         return await CreateGameInternal(sp, req.GameType, req.PlayerCount, req.EntryFee, req.ConfigJson); 
     }
 
@@ -81,9 +76,16 @@ public static class AdminEndpoints
         long entryFee, 
         string? configJson)
     {
+        if (string.IsNullOrWhiteSpace(gameType))
+            return Results.BadRequest("Game type is required");
+        
+        if (maxPlayers < 1 || maxPlayers > 100)
+            return Results.BadRequest("Max players must be between 1 and 100");
+
         var roomService = sp.GetKeyedService<IGameRoomService>(gameType);
         if (roomService == null) return Results.BadRequest($"Game type '{gameType}' not supported");
 
+        var logger = sp.GetRequiredService<ILogger<IGameRoomService>>();
         var configDict = new Dictionary<string, string>();
         if (!string.IsNullOrEmpty(configJson))
         {
@@ -92,10 +94,14 @@ public static class AdminEndpoints
                 var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(configJson);
                 if (dict != null)
                 {
-                    foreach(var kvp in dict) configDict[kvp.Key] = kvp.Value.ToString() ?? "";
+                    foreach(var kvp in dict) configDict[kvp.Key] = kvp.Value?.ToString() ?? "";
                 }
             } 
-            catch { /* Ignore malformed JSON */ }
+            catch (JsonException ex)
+            {
+                logger.LogWarning(ex, "Invalid JSON config provided for game type {GameType}", gameType);
+                return Results.BadRequest("Invalid configuration JSON format");
+            }
         }
 
         var metaConfig = new GameRoomMeta
@@ -111,7 +117,6 @@ public static class AdminEndpoints
         return Results.Ok(new { RoomId = roomId, GameType = gameType });
     }
 
-    // ... GetGameState, DeleteGame, GetGames, GetPlayers, UpdatePlayerCoins, DeletePlayer (Keep existing) ...
     private static async Task<IResult> GetGameState(string roomId, IServiceProvider sp, IRoomRegistry registry)
     {
         var gameType = await registry.GetGameTypeAsync(roomId);
@@ -179,6 +184,5 @@ public static class AdminEndpoints
         return Results.Ok();
     }
 
-    // UPDATED: Added EntryFee and ConfigJson
     public record CreateGameRequest(string GameType, int PlayerCount, long EntryFee = 0, string? ConfigJson = null);
 }

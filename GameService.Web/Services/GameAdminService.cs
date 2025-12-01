@@ -7,7 +7,6 @@ namespace GameService.Web.Services;
 
 public class GameAdminService(HttpClient http)
 {
-    // ... GetActiveGamesAsync, GetPlayersAsync, UpdatePlayerCoinsAsync, PlayLudo... (Keep existing)
     public async Task<List<GameRoomDto>> GetActiveGamesAsync()
         => await http.GetFromJsonAsync<List<GameRoomDto>>("/admin/games") ?? [];
 
@@ -59,8 +58,6 @@ public class GameAdminService(HttpClient http)
         try { return await http.GetFromJsonAsync<JsonElement>($"/admin/luckymine/{roomId}/state"); } catch { return null; }
     }
 
-    // --- TEMPLATE & CREATION METHODS (UPDATED) ---
-
     public async Task<List<GameTemplateDto>> GetTemplatesAsync()
         => await http.GetFromJsonAsync<List<GameTemplateDto>>("/admin/templates") ?? [];
 
@@ -76,7 +73,6 @@ public class GameAdminService(HttpClient http)
         res.EnsureSuccessStatusCode();
     }
 
-    // Updated: Returns the Room ID
     public async Task<string?> CreateGameFromTemplateAsync(int templateId)
     {
         var res = await http.PostAsJsonAsync("/admin/games/create-from-template", new CreateRoomFromTemplateRequest(templateId));
@@ -85,7 +81,6 @@ public class GameAdminService(HttpClient http)
         return content.TryGetProperty("roomId", out var p) ? p.GetString() : null;
     }
 
-    // Updated: Accepts detailed settings and returns Room ID
     public async Task<string?> CreateGameAsync(string gameType, int playerCount, long entryFee = 0, string? configJson = null)
     {
         var payload = new 

@@ -1,10 +1,10 @@
 using System.Runtime.InteropServices;
-using System.Text.Json.Serialization;
+using GameService.GameCore;
 
 namespace GameService.LuckyMine;
 
 [StructLayout(LayoutKind.Explicit, Size = 64)]
-public struct LuckyMineState
+public struct LuckyMineState : IGameState
 {
     [FieldOffset(0)] public ulong MineMask0;
     [FieldOffset(8)] public ulong MineMask1;

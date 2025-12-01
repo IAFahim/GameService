@@ -117,11 +117,21 @@ app.Use(async (context, next) =>
     var apiKey = context.Request.Headers["X-Admin-Key"].FirstOrDefault();
     var configuredKey = context.RequestServices.GetRequiredService<IConfiguration>()["AdminSettings:ApiKey"];
 
-    if (!string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(configuredKey) && apiKey == configuredKey)
+    if (!string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(configuredKey))
     {
-        var claims = new[] { new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Admin") };
-        var identity = new System.Security.Claims.ClaimsIdentity(claims, "ApiKey");
-        context.User = new System.Security.Claims.ClaimsPrincipal(identity);
+        if (System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Text.Encoding.UTF8.GetBytes(apiKey),
+                System.Text.Encoding.UTF8.GetBytes(configuredKey)))
+        {
+            var claims = new[] 
+            { 
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Admin"),
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "api-key-admin"),
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.AuthenticationMethod, "ApiKey")
+            };
+            var identity = new System.Security.Claims.ClaimsIdentity(claims, "ApiKey");
+            context.User = new System.Security.Claims.ClaimsPrincipal(identity);
+        }
     }
     await next();
 });

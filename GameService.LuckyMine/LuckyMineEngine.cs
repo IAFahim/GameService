@@ -6,7 +6,6 @@ namespace GameService.LuckyMine;
 
 public sealed class LuckyMineEngine(
     IGameRepositoryFactory repoFactory,
-    IRoomRegistry roomRegistry,
     ILogger<LuckyMineEngine> logger) : IGameEngine
 {
     private readonly IGameRepository<LuckyMineState> _repository 

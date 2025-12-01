@@ -22,7 +22,6 @@ public record SupportedGameDto(string Name);
 
 public record GameTemplateDto(int Id, string Name, string GameType, int MaxPlayers, long EntryFee, string? ConfigJson);
 
-// CHANGED: Mutable class for Blazor Binding
 public class CreateTemplateRequest
 {
     public string Name { get; set; } = "";

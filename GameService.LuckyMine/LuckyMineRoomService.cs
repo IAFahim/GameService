@@ -16,25 +16,22 @@ public sealed class LuckyMineRoomService(
 
     public async Task<string> CreateRoomAsync(GameRoomMeta meta)
     {
-        // Generate Short ID (5 chars)
         var roomId = GenerateShortId();
-        
-        // Read Config
+
         int totalTiles = 100;
         int mineCount = 20;
 
         if (meta.Config.TryGetValue("TotalTiles", out var tilesStr) && int.TryParse(tilesStr, out var t)) totalTiles = t;
         if (meta.Config.TryGetValue("TotalMines", out var minesStr) && int.TryParse(minesStr, out var m)) mineCount = m;
-        
-        // Ensure constraints
-        if (totalTiles > 128) totalTiles = 128; // Max supported by 2 ulongs
+
+        if (totalTiles > 128) totalTiles = 128;
         if (mineCount >= totalTiles) mineCount = totalTiles - 1;
 
         var state = new LuckyMineState
         {
             TotalTiles = (byte)totalTiles,
             TotalMines = (byte)mineCount,
-            JackpotCounter = (int)(meta.EntryFee * 100), // Jackpot based on entry fee
+            JackpotCounter = (int)(meta.EntryFee * 100),
             EntryCost = (int)meta.EntryFee,
             RewardSlope = 0.5f,
             Status = (byte)LuckyMineStatus.Active
@@ -50,7 +47,7 @@ public sealed class LuckyMineRoomService(
 
     private string GenerateShortId()
     {
-        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // No O, 0, I, 1
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         return string.Create(5, chars, (span, charset) => 
         {
             for(int i=0; i<span.Length; i++) span[i] = charset[RandomNumberGenerator.GetInt32(charset.Length)];

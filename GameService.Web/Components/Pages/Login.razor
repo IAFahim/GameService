@@ -15,27 +15,30 @@
 <div class="row">
     <div class="col-md-4">
         <section>
-            <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
-                <DataAnnotationsValidator />
-                <h2>Use a local account to log in.</h2>
-                <hr />
-                <div class="text-danger">@errorMessage</div>
-                
-                <div class="form-floating mb-3">
-                    <InputText @bind-Value="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" data-testid="login-email" />
-                    <label for="email">Email</label>
-                    <ValidationMessage For="() => Input.Email" class="text-danger" />
-                </div>
-                <div class="form-floating mb-3">
-                    <InputText @bind-Value="Input.Password" type="password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" data-testid="login-password" />
-                    <label for="password">Password</label>
-                    <ValidationMessage For="() => Input.Password" class="text-danger" />
-                </div>
-                
-                <div>
-                    <button type="submit" class="w-100 btn btn-lg btn-primary" data-testid="login-submit">Log in</button>
-                </div>
-            </EditForm>
+            @if (Input is not null)
+            {
+                <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
+                    <DataAnnotationsValidator />
+                    <h2>Use a local account to log in.</h2>
+                    <hr />
+                    <div class="text-danger">@errorMessage</div>
+                    
+                    <div class="form-floating mb-3">
+                        <InputText @bind-Value="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
+                        <label for="email">Email</label>
+                        <ValidationMessage For="() => Input.Email" class="text-danger" />
+                    </div>
+                    <div class="form-floating mb-3">
+                        <InputText @bind-Value="Input.Password" type="password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" />
+                        <label for="password">Password</label>
+                        <ValidationMessage For="() => Input.Password" class="text-danger" />
+                    </div>
+                    
+                    <div>
+                        <button type="submit" class="w-100 btn btn-lg btn-primary">Log in</button>
+                    </div>
+                </EditForm>
+            }
         </section>
     </div>
 </div>

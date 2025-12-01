@@ -36,6 +36,13 @@ namespace GameService.ApiService;
 [JsonSerializable(typeof(PlayerLeftEvent))]
 [JsonSerializable(typeof(ActionErrorEvent))]
 [JsonSerializable(typeof(Dictionary<string, int>))]
+
+[JsonSerializable(typeof(GameTemplateDto))]
+[JsonSerializable(typeof(List<GameTemplateDto>))]
+[JsonSerializable(typeof(CreateTemplateRequest))]
+[JsonSerializable(typeof(CreateRoomFromTemplateRequest))]
+[JsonSerializable(typeof(Dictionary<string, string>))]
+[JsonSerializable(typeof(Dictionary<string, object>))]
 internal partial class GameJsonContext : JsonSerializerContext
 {
 }

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace GameService.LuckyMine;
 
+
 public sealed class LuckyMineRoomService(
     IGameRepositoryFactory repoFactory,
     ILogger<LuckyMineRoomService> logger) : IGameRoomService
@@ -13,38 +14,47 @@ public sealed class LuckyMineRoomService(
 
     public string GameType => "LuckyMine";
 
-    public async Task<string> CreateRoomAsync(string? hostUserId, int playerCount = 20)
+    public async Task<string> CreateRoomAsync(GameRoomMeta meta)
     {
-        var roomId = Guid.NewGuid().ToString("N")[..8];
-
+        // Generate Short ID (5 chars)
+        var roomId = GenerateShortId();
+        
+        // Read Config
         int totalTiles = 100;
         int mineCount = 20;
-        int startJackpot = 1000;
-        int entryCost = 1;
+
+        if (meta.Config.TryGetValue("TotalTiles", out var tilesStr) && int.TryParse(tilesStr, out var t)) totalTiles = t;
+        if (meta.Config.TryGetValue("TotalMines", out var minesStr) && int.TryParse(minesStr, out var m)) mineCount = m;
+        
+        // Ensure constraints
+        if (totalTiles > 128) totalTiles = 128; // Max supported by 2 ulongs
+        if (mineCount >= totalTiles) mineCount = totalTiles - 1;
 
         var state = new LuckyMineState
         {
             TotalTiles = (byte)totalTiles,
             TotalMines = (byte)mineCount,
-            JackpotCounter = startJackpot,
-            EntryCost = entryCost,
+            JackpotCounter = (int)(meta.EntryFee * 100), // Jackpot based on entry fee
+            EntryCost = (int)meta.EntryFee,
             RewardSlope = 0.5f,
             Status = (byte)LuckyMineStatus.Active
         };
 
         PopulateMines(ref state, totalTiles, mineCount);
 
-        var meta = new GameRoomMeta
-        {
-            GameType = GameType,
-            MaxPlayers = playerCount,
-            PlayerSeats = hostUserId != null ? new Dictionary<string, int> { [hostUserId] = 0 } : new()
-        };
-
         await _repository.SaveAsync(roomId, state, meta);
-        logger.LogInformation("Created LuckyMine room {RoomId}", roomId);
+        logger.LogInformation("Created LuckyMine room {RoomId} (Mines: {Mines})", roomId, mineCount);
 
         return roomId;
+    }
+
+    private string GenerateShortId()
+    {
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // No O, 0, I, 1
+        return string.Create(5, chars, (span, charset) => 
+        {
+            for(int i=0; i<span.Length; i++) span[i] = charset[RandomNumberGenerator.GetInt32(charset.Length)];
+        });
     }
 
     /// <summary>

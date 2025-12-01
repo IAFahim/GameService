@@ -1,20 +1,18 @@
 using GameService.GameCore;
 using GameService.ServiceDefaults.DTOs;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace GameService.Web.Services;
 
 public class GameAdminService(HttpClient http)
 {
+    // ... GetActiveGamesAsync, GetPlayersAsync, UpdatePlayerCoinsAsync, PlayLudo... (Keep existing)
     public async Task<List<GameRoomDto>> GetActiveGamesAsync()
-    {
-        return await http.GetFromJsonAsync<List<GameRoomDto>>("/admin/games") ?? [];
-    }
+        => await http.GetFromJsonAsync<List<GameRoomDto>>("/admin/games") ?? [];
 
     public async Task<List<AdminPlayerDto>> GetPlayersAsync()
-    {
-        return await http.GetFromJsonAsync<List<AdminPlayerDto>>("/admin/players") ?? [];
-    }
+        => await http.GetFromJsonAsync<List<AdminPlayerDto>>("/admin/players") ?? [];
 
     public async Task UpdatePlayerCoinsAsync(string userId, long amount)
     {
@@ -34,16 +32,9 @@ public class GameAdminService(HttpClient http)
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task<System.Text.Json.JsonElement?> GetGameStateAsync(string roomId)
+    public async Task<JsonElement?> GetGameStateAsync(string roomId)
     {
-        try 
-        {
-            return await http.GetFromJsonAsync<System.Text.Json.JsonElement>($"/admin/games/{roomId}");
-        }
-        catch
-        {
-            return null;
-        }
+        try { return await http.GetFromJsonAsync<JsonElement>($"/admin/games/{roomId}"); } catch { return null; }
     }
 
     public async Task DeletePlayerAsync(string userId)
@@ -63,21 +54,51 @@ public class GameAdminService(HttpClient http)
         return await http.GetFromJsonAsync<List<SupportedGameDto>>("/games/supported") ?? [];
     }
     
-    public async Task CreateGameAsync(string gameType, int playerCount)
+    public async Task<JsonElement?> GetLuckyMineFullStateAsync(string roomId)
     {
-        var response = await http.PostAsJsonAsync("/admin/games", new { GameType = gameType, PlayerCount = playerCount });
-        response.EnsureSuccessStatusCode();
+        try { return await http.GetFromJsonAsync<JsonElement>($"/admin/luckymine/{roomId}/state"); } catch { return null; }
     }
-    
-    public async Task<System.Text.Json.JsonElement?> GetLuckyMineFullStateAsync(string roomId)
+
+    // --- TEMPLATE & CREATION METHODS (UPDATED) ---
+
+    public async Task<List<GameTemplateDto>> GetTemplatesAsync()
+        => await http.GetFromJsonAsync<List<GameTemplateDto>>("/admin/templates") ?? [];
+
+    public async Task CreateTemplateAsync(CreateTemplateRequest req)
     {
-        try 
-        {
-            return await http.GetFromJsonAsync<System.Text.Json.JsonElement>($"/admin/luckymine/{roomId}/state");
-        }
-        catch
-        {
-            return null;
-        }
+        var res = await http.PostAsJsonAsync("/admin/templates", req);
+        res.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeleteTemplateAsync(int id)
+    {
+        var res = await http.DeleteAsync($"/admin/templates/{id}");
+        res.EnsureSuccessStatusCode();
+    }
+
+    // Updated: Returns the Room ID
+    public async Task<string?> CreateGameFromTemplateAsync(int templateId)
+    {
+        var res = await http.PostAsJsonAsync("/admin/games/create-from-template", new CreateRoomFromTemplateRequest(templateId));
+        res.EnsureSuccessStatusCode();
+        var content = await res.Content.ReadFromJsonAsync<JsonElement>();
+        return content.TryGetProperty("roomId", out var p) ? p.GetString() : null;
+    }
+
+    // Updated: Accepts detailed settings and returns Room ID
+    public async Task<string?> CreateGameAsync(string gameType, int playerCount, long entryFee = 0, string? configJson = null)
+    {
+        var payload = new 
+        { 
+            GameType = gameType, 
+            PlayerCount = playerCount,
+            EntryFee = entryFee,
+            ConfigJson = configJson
+        };
+        
+        var response = await http.PostAsJsonAsync("/admin/games", payload);
+        response.EnsureSuccessStatusCode();
+        var content = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return content.TryGetProperty("roomId", out var p) ? p.GetString() : null;
     }
 }

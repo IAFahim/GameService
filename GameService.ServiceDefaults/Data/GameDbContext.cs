@@ -10,6 +10,7 @@ public class GameDbContext(DbContextOptions<GameDbContext> options, IGameEventPu
     : IdentityDbContext<ApplicationUser>(options)
 {
     public DbSet<PlayerProfile> PlayerProfiles => Set<PlayerProfile>();
+    public DbSet<GameRoomTemplate> RoomTemplates => Set<GameRoomTemplate>(); // NEW
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -26,6 +27,14 @@ public class GameDbContext(DbContextOptions<GameDbContext> options, IGameEventPu
         builder.Entity<PlayerProfile>()
             .HasIndex(p => p.UserId)
             .IsUnique();
+            
+        // Default Templates Seeding
+        builder.Entity<GameRoomTemplate>().HasData(
+            new GameRoomTemplate { Id = 1, Name = "Classic Ludo (4P)", GameType = "Ludo", MaxPlayers = 4, EntryFee = 100 },
+            new GameRoomTemplate { Id = 2, Name = "1v1 Ludo", GameType = "Ludo", MaxPlayers = 2, EntryFee = 500 },
+            new GameRoomTemplate { Id = 3, Name = "Standard Mines", GameType = "LuckyMine", MaxPlayers = 20, EntryFee = 10, ConfigJson = "{\"TotalMines\":20,\"TotalTiles\":100}" },
+            new GameRoomTemplate { Id = 4, Name = "Impossible Mines", GameType = "LuckyMine", MaxPlayers = 10, EntryFee = 100, ConfigJson = "{\"TotalMines\":90,\"TotalTiles\":100}" }
+        );
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -102,4 +111,14 @@ public class PlayerProfile
 
     [ConcurrencyCheck]
     public Guid Version { get; set; } = Guid.NewGuid();
+}
+
+public class GameRoomTemplate
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    public required string GameType { get; set; }
+    public int MaxPlayers { get; set; } = 4;
+    public long EntryFee { get; set; } = 0;
+    public string? ConfigJson { get; set; } // Game specific settings (JSON)
 }

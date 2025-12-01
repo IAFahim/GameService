@@ -11,26 +11,11 @@ public interface IGameRoomService
     /// <summary>
     /// Create a new game room
     /// </summary>
-    Task<string> CreateRoomAsync(string? hostUserId, int playerCount = 4);
+    Task<string> CreateRoomAsync(GameRoomMeta config);
 
-    /// <summary>
-    /// Delete a game room
-    /// </summary>
     Task DeleteRoomAsync(string roomId);
-
-    /// <summary>
-    /// Join an existing room
-    /// </summary>
     Task<JoinRoomResult> JoinRoomAsync(string roomId, string userId);
-
-    /// <summary>
-    /// Leave a room
-    /// </summary>
     Task LeaveRoomAsync(string roomId, string userId);
-
-    /// <summary>
-    /// Get room metadata
-    /// </summary>
     Task<GameRoomMeta?> GetRoomMetaAsync(string roomId);
 }
 

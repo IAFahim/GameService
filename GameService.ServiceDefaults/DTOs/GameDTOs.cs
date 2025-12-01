@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace GameService.ServiceDefaults.DTOs;
@@ -20,3 +19,17 @@ public record PlayerUpdatedMessage(
     int ProfileId = 0);
 
 public record SupportedGameDto(string Name);
+
+public record GameTemplateDto(int Id, string Name, string GameType, int MaxPlayers, long EntryFee, string? ConfigJson);
+
+// CHANGED: Mutable class for Blazor Binding
+public class CreateTemplateRequest
+{
+    public string Name { get; set; } = "";
+    public string GameType { get; set; } = "Ludo";
+    public int MaxPlayers { get; set; } = 4;
+    public long EntryFee { get; set; } = 100;
+    public string? ConfigJson { get; set; }
+}
+
+public record CreateRoomFromTemplateRequest(int TemplateId);

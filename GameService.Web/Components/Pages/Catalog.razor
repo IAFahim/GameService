@@ -27,7 +27,7 @@
                         <p class="text-muted">Fully supported game module.</p>
                         
                         <button class="btn btn-primary w-100" @onclick="() => OpenCreateModal(game.Name)">
-                            <i class="bi bi-plus-circle"></i> Create New Room
+                            <i class="bi bi-plus-circle"></i> Create Custom Room
                         </button>
                     </div>
                 </div>
@@ -46,14 +46,26 @@
                     <button type="button" class="btn-close" @onclick="CloseModal"></button>
                 </div>
                 <div class="modal-body">
-                    <!-- FIX: Allow 1 to 20 players -->
-                    <label class="form-label">Player Capacity (Max 20)</label>
-                    <input type="number" class="form-control" @bind="playerCount" min="1" max="20" />
-                    <div class="form-text">Supports up to 20 players for Lucky Mine.</div>
+                    <div class="mb-3">
+                        <label class="form-label">Player Capacity (Max 20)</label>
+                        <input type="number" class="form-control" @bind="playerCount" min="1" max="20" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Entry Fee (Coins)</label>
+                        <input type="number" class="form-control" @bind="entryFee" min="0" step="10" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Config JSON <small class="text-muted">(Optional)</small></label>
+                        <textarea class="form-control" @bind="configJson" placeholder='{"TotalMines": 20}' rows="2"></textarea>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
-                    <button class="btn btn-success" @onclick="CreateGame">Launch</button>
+                    <button class="btn btn-success" @onclick="CreateGame">
+                        Launch Room <i class="bi bi-rocket-takeoff-fill ms-2"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -64,17 +76,29 @@
     private List<SupportedGameDto>? games;
     private bool showModal = false;
     private string selectedGame = "";
-    private int playerCount = 20; // Default to max for massive battles
+    
+    // Form Model
+    private int playerCount = 4;
+    private long entryFee = 0;
+    private string? configJson;
 
     protected override async Task OnInitializedAsync() => games = await AdminService.GetSupportedGamesAsync();
 
     private void OpenCreateModal(string gameName)
     {
         selectedGame = gameName;
-        // Smart defaults based on game type
-        if (gameName == "LuckyMine") playerCount = 20;
-        else playerCount = 4;
-        
+        // Smart defaults
+        if (gameName == "LuckyMine") 
+        {
+            playerCount = 20;
+            configJson = "{\"TotalMines\": 20}";
+        }
+        else 
+        {
+            playerCount = 4;
+            configJson = null;
+        }
+        entryFee = 0;
         showModal = true;
     }
 
@@ -86,8 +110,12 @@
         if (playerCount < 1) playerCount = 1;
         if (playerCount > 20) playerCount = 20;
 
-        await AdminService.CreateGameAsync(selectedGame, playerCount);
+        var roomId = await AdminService.CreateGameAsync(selectedGame, playerCount, entryFee, configJson);
         showModal = false;
-        Nav.NavigateTo("games");
+        
+        if (!string.IsNullOrEmpty(roomId))
+        {
+            Nav.NavigateTo($"games/{roomId}");
+        }
     }
 }

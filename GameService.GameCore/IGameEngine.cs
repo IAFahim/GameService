@@ -102,5 +102,10 @@ public sealed record GameRoomMeta
     public bool IsPublic { get; init; } = true;
     public string GameType { get; init; } = "";
     public int MaxPlayers { get; init; } = 4;
+    
+    // NEW: Financials and Rule Config
+    public long EntryFee { get; init; } = 0; 
+    public Dictionary<string, string> Config { get; init; } = new();
+
     public int CurrentPlayerCount => PlayerSeats.Count;
 }

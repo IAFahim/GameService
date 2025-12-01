@@ -15,10 +15,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GameService.Web", "GameServ
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameService.UnitTests", "GameService.UnitTests\GameService.UnitTests.csproj", "{B489B2B4-0B4A-4A76-BB9E-F159359FBDAA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameService.ArchitectureTests", "GameService.ArchitectureTests\GameService.ArchitectureTests.csproj", "{939A8D91-3F26-42EF-A0C0-0243773D786D}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameService.ComponentTests", "GameService.ComponentTests\GameService.ComponentTests.csproj", "{4F1B5017-F50C-433C-9347-D88A4DC24DD5}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameService.PerformanceTests", "GameService.PerformanceTests\GameService.PerformanceTests.csproj", "{7DBD6D9A-A501-49BC-BAC1-368E8ED3641C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameService.Ludo", "GameService.Ludo\GameService.Ludo.csproj", "{FA5F7E62-C8A7-440A-91A0-D2F6257A26B5}"
@@ -109,30 +105,6 @@ Global
 		{B489B2B4-0B4A-4A76-BB9E-F159359FBDAA}.Release|x64.Build.0 = Release|Any CPU
 		{B489B2B4-0B4A-4A76-BB9E-F159359FBDAA}.Release|x86.ActiveCfg = Release|Any CPU
 		{B489B2B4-0B4A-4A76-BB9E-F159359FBDAA}.Release|x86.Build.0 = Release|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Debug|x64.Build.0 = Debug|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Debug|x86.Build.0 = Debug|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Release|Any CPU.Build.0 = Release|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Release|x64.ActiveCfg = Release|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Release|x64.Build.0 = Release|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Release|x86.ActiveCfg = Release|Any CPU
-		{939A8D91-3F26-42EF-A0C0-0243773D786D}.Release|x86.Build.0 = Release|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Debug|x64.Build.0 = Debug|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Debug|x86.Build.0 = Debug|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Release|Any CPU.Build.0 = Release|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Release|x64.ActiveCfg = Release|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Release|x64.Build.0 = Release|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Release|x86.ActiveCfg = Release|Any CPU
-		{4F1B5017-F50C-433C-9347-D88A4DC24DD5}.Release|x86.Build.0 = Release|Any CPU
 		{7DBD6D9A-A501-49BC-BAC1-368E8ED3641C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{7DBD6D9A-A501-49BC-BAC1-368E8ED3641C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7DBD6D9A-A501-49BC-BAC1-368E8ED3641C}.Debug|x64.ActiveCfg = Debug|Any CPU

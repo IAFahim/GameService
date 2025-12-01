@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using GameService.GameCore;
 using Microsoft.Extensions.Logging;
 
@@ -25,27 +26,26 @@ public sealed class LudoRoomService : IGameRoomService
         _logger = logger;
     }
 
-    public async Task<string> CreateRoomAsync(string? hostUserId, int playerCount = 4)
+    public async Task<string> CreateRoomAsync(GameRoomMeta meta)
     {
-        var roomId = Guid.NewGuid().ToString("N")[..8];
+        var roomId = GenerateShortId();
         
         var engine = new LudoEngine(new ServerDiceRoller());
-        engine.InitNewGame(playerCount);
+        engine.InitNewGame(meta.MaxPlayers);
+        
         if (engine.State.Winner == 0) engine.State.Winner = 255;
 
-        var meta = new GameRoomMeta
-        {
-            PlayerSeats = hostUserId != null ? new Dictionary<string, int> { [hostUserId] = 0 } : new(),
-            IsPublic = true,
-            GameType = GameType,
-            MaxPlayers = playerCount
-        };
-
         await _repository.SaveAsync(roomId, engine.State, meta);
-        
-        _logger.LogInformation("Created Ludo room {RoomId} with {PlayerCount} players", roomId, playerCount);
-        
+        _logger.LogInformation("Created Ludo room {RoomId}", roomId);
         return roomId;
+    }
+
+    private string GenerateShortId()
+    {
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        return string.Create(6, chars, (span, charset) => {
+            for(int i=0; i<span.Length; i++) span[i] = charset[RandomNumberGenerator.GetInt32(charset.Length)];
+        });
     }
 
     public async Task DeleteRoomAsync(string roomId)

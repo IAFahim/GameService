@@ -1,3 +1,4 @@
+@using GameService.Ludo
 @inject GameAdminService AdminService
 
 <div class="row g-4">
@@ -7,15 +8,15 @@
             <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
                 <h5 class="mb-0 text-secondary"><i class="bi bi-grid-3x3 me-2"></i>Board State</h5>
                 <div>
-                    @if (State.Winner != -1)
+                    @if (State.IsGameOver)
                     {
-                        <span class="badge bg-warning text-dark fs-6 animate-pulse">
-                            <i class="bi bi-trophy-fill me-1"></i> Player @State.Winner Wins!
+                        <span class="badge bg-success text-white fs-6 animate-pulse">
+                            <i class="bi bi-flag-fill me-1"></i> Game Finished
                         </span>
                     }
                     else
                     {
-                        <span class="badge bg-light text-secondary border">Turn ID: @State.TurnId</span>
+                        <span class="badge bg-light text-secondary border">Turn: @State.TurnId</span>
                     }
                 </div>
             </div>
@@ -26,8 +27,9 @@
                     <div class="text-uppercase small text-muted mb-2 fw-bold tracking-wider">Current Action</div>
                     <div class="d-flex align-items-center justify-content-center gap-3">
                         <div class="d-flex flex-column align-items-center">
-                            <span
-                                class="badge @GetPlayerBadgeClass(State.CurrentPlayer) mb-2">Player @State.CurrentPlayer's Turn</span>
+                            <span class="badge @GetPlayerBadgeClass(State.CurrentPlayer) mb-2">
+                                Player @State.CurrentPlayer's Turn
+                            </span>
                         </div>
                         <div class="vr"></div>
                         <div class="d-flex align-items-center">
@@ -51,19 +53,17 @@
                         var playerIdx = p;
                         var isTurn = State.CurrentPlayer == playerIdx;
                         var isActive = IsSeatActive(playerIdx);
+                        var isFinished = IsFinished(playerIdx);
 
-                        <div
-                            class="player-track-card bg-white rounded border @(isTurn ? "border-primary border-2 shadow-sm" : "") p-3">
+                        <div class="player-track-card bg-white rounded border @(isTurn ? "border-primary border-2 shadow-sm" : "") p-3">
                             <div class="d-flex align-items-center mb-2">
                                 <div class="badge-circle me-2 @GetPlayerBgClass(playerIdx)">P@(playerIdx)</div>
                                 <div class="fw-bold flex-grow-1 @(!isActive ? "text-muted" : "")">
                                     Player @playerIdx
-                                    @if (!isActive)
-                                    {
-                                        <small>(Empty)</small>
-                                    }
+                                    @if (!isActive) { <small>(Empty)</small> }
+                                    @if (isFinished) { <span class="badge bg-success ms-2">Finished</span> }
                                 </div>
-                                @if (isTurn)
+                                @if (isTurn && !State.IsGameOver)
                                 {
                                     <div class="spinner-grow spinner-grow-sm text-primary" role="status"></div>
                                 }
@@ -79,34 +79,21 @@
                                     var isMovable = IsMoveLegal(playerIdx, tokenIdx);
 
                                     <div class="col-3">
-                                        <div class="token-lane position-relative" style="cursor: default"
-                                             title="Pos: @pos">
+                                        <div class="token-lane position-relative" style="cursor: default" title="Pos: @pos">
                                             <div class="progress" style="height: 6px;">
-                                                <div class="progress-bar @GetPlayerBgClass(playerIdx)"
-                                                     role="progressbar"
-                                                     style="width: @progress%"></div>
+                                                <div class="progress-bar @GetPlayerBgClass(playerIdx)" role="progressbar" style="width: @progress%"></div>
                                             </div>
                                             <div class="d-flex justify-content-between mt-1" style="font-size: 0.7rem;">
                                                 <span class="fw-bold text-muted">T@(tokenIdx)</span>
-                                                @if (pos == 0)
-                                                {
-                                                    <span class="badge bg-secondary" style="font-size:0.6em">BASE</span>
-                                                }
-                                                else if (pos == 57)
-                                                {
-                                                    <span class="badge bg-success" style="font-size:0.6em">HOME</span>
-                                                }
-                                                else
-                                                {
-                                                    <span>@pos</span>
-                                                }
+                                                @if (pos == 0) { <span class="badge bg-secondary" style="font-size:0.6em">BASE</span> }
+                                                else if (pos == 57) { <span class="badge bg-success" style="font-size:0.6em">HOME</span> }
+                                                else { <span>@pos</span> }
                                             </div>
 
                                             <!-- Valid Move Indicator overlay -->
                                             @if (isMovable)
                                             {
-                                                <div
-                                                    class="position-absolute top-0 start-100 translate-middle p-1 bg-success border border-light rounded-circle">
+                                                <div class="position-absolute top-0 start-100 translate-middle p-1 bg-success border border-light rounded-circle">
                                                     <span class="visually-hidden">Legal Move</span>
                                                 </div>
                                             }
@@ -116,6 +103,10 @@
                             </div>
                         </div>
                     }
+                </div>
+                
+                <div class="mt-3">
+                    <strong>Winners:</strong> @GetWinnersString()
                 </div>
             </div>
         </div>
@@ -140,7 +131,7 @@
                     <label class="form-label text-uppercase small fw-bold text-muted">Phase 1: Roll</label>
                     <button class="btn btn-primary w-100 py-2 shadow-sm"
                             @onclick="DoForceRoll"
-                            disabled="@(isBusy || State.LastDiceRoll != 0 || State.Winner != -1)">
+                            disabled="@(isBusy || State.LastDiceRoll != 0 || State.IsGameOver)">
                         @if (isBusy && State.LastDiceRoll == 0)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
@@ -159,10 +150,9 @@
                             var tIdx = i;
                             var isLegal = IsMoveLegal(State.CurrentPlayer, tIdx);
 
-                            <button
-                                class="btn @(isLegal ? "btn-success" : "btn-outline-secondary") d-flex justify-content-between align-items-center"
-                                @onclick="() => DoForceMove(tIdx)"
-                                disabled="@(isBusy || !isLegal)">
+                            <button class="btn @(isLegal ? "btn-success" : "btn-outline-secondary") d-flex justify-content-between align-items-center"
+                                    @onclick="() => DoForceMove(tIdx)"
+                                    disabled="@(isBusy || !isLegal)">
                                 <span>Move Token @tIdx</span>
                                 @if (isLegal)
                                 {
@@ -171,12 +161,6 @@
                             </button>
                         }
                     </div>
-                    @if (State.LastDiceRoll > 0 && !HasAnyLegalMove())
-                    {
-                        <div class="alert alert-warning mt-2 small text-center">
-                            No legal moves available.
-                        </div>
-                    }
                 </div>
 
                 <div class="mt-auto pt-3 border-top">
@@ -190,49 +174,10 @@
 </div>
 
 <style>
-    .badge-circle {
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: bold;
-        font-size: 0.8rem;
-    }
-
-    .dice-box {
-        width: 40px;
-        height: 40px;
-        background: #333;
-        color: white;
-        font-size: 1.5rem;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 8px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-    }
-
-    .bounce-in {
-        animation: bounce 0.5s;
-    }
-
-    @@keyframes bounce {
-        0% {
-            transform: scale(0.1);
-            opacity: 0;
-        }
-        60% {
-            transform: scale(1.2);
-            opacity: 1;
-        }
-        100% {
-            transform: scale(1);
-        }
-    }
+    .badge-circle { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem; }
+    .dice-box { width: 40px; height: 40px; background: #333; color: white; font-size: 1.5rem; font-weight: bold; display: flex; align-items: center; justify-content: center; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+    .bounce-in { animation: bounce 0.5s; }
+    @@keyframes bounce { 0% { transform: scale(0.1); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); } }
 </style>
 
 @code {
@@ -249,95 +194,45 @@
         return index < State.Tokens.Length ? State.Tokens[index] : 0;
     }
 
-    private double GetProgressPercent(int pos)
-    {
-        if (pos == 0) return 0;
-        if (pos >= 57) return 100;
-        return pos / 57.0 * 100;
-    }
+    private double GetProgressPercent(int pos) => pos >= 57 ? 100 : pos / 57.0 * 100;
 
-    private string GetPlayerBgClass(int p)
-    {
-        return p switch { 0 => "bg-danger", 1 => "bg-success", 2 => "bg-warning", _ => "bg-primary" };
-    }
+    private string GetPlayerBgClass(int p) => p switch { 0 => "bg-danger", 1 => "bg-success", 2 => "bg-warning", _ => "bg-primary" };
+    private string GetPlayerBadgeClass(int p) => p switch { 0 => "bg-danger-subtle text-danger", 1 => "bg-success-subtle text-success", 2 => "bg-warning-subtle text-dark", _ => "bg-primary-subtle text-primary" };
 
-    private string GetPlayerBadgeClass(int p)
-    {
-        return p switch { 0 => "bg-danger-subtle text-danger", 1 => "bg-success-subtle text-success", 2 => "bg-warning-subtle text-dark", _ => "bg-primary-subtle text-primary" };
-    }
-
-    private bool IsSeatActive(int p)
-    {
-        if (string.IsNullOrEmpty(State.ActiveSeatsBinary)) return false;
-
-        try
-        {
-            var mask = Convert.ToInt32(State.ActiveSeatsBinary, 2);
-            return (mask & (1 << p)) != 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    // New optimized mask checks
+    private bool IsSeatActive(int p) => (State.ActiveSeatsMask & (1 << p)) != 0;
+    private bool IsFinished(int p) => (State.FinishedMask & (1 << p)) != 0;
 
     private bool IsMoveLegal(int player, int tokenIndex)
     {
-        if (State.LastDiceRoll == 0 || State.CurrentPlayer != player) return false;
-
-        var currentPos = GetTokenPos(player, tokenIndex);
-
-        if (currentPos == 0) return State.LastDiceRoll == 6;
-        if (currentPos == 57) return false;
-        return currentPos + State.LastDiceRoll <= 57;
+        if (State.CurrentPlayer != player) return false;
+        // Use the mask sent from server
+        return (State.LegalMovesMask & (1 << tokenIndex)) != 0;
     }
 
-    private bool HasAnyLegalMove()
+    private string GetWinnersString()
     {
-        for (var i = 0; i < 4; i++)
-            if (IsMoveLegal(State.CurrentPlayer, i))
-                return true;
-        return false;
+        var list = new List<string>();
+        uint packed = State.WinnersPacked;
+        for (int i = 0; i < 4; i++)
+        {
+            byte pid = (byte)((packed >> (i * 8)) & 0xFF);
+            if (pid != 255) list.Add($"#{i+1}: P{pid}");
+        }
+        return list.Count == 0 ? "-" : string.Join(", ", list);
     }
 
-    private async Task DoForceRoll()
-    {
-        await ExecuteSafe(async () => await AdminService.PlayLudoRollAsync(RoomId));
-    }
-
-    private async Task DoForceMove(int tokenIndex)
-    {
-        await ExecuteSafe(async () => await AdminService.PlayLudoMoveAsync(RoomId, tokenIndex));
-    }
-
-    private async Task DoRefresh()
-    {
-        await ExecuteSafe(async () => await Task.CompletedTask);
-    }
+    private async Task DoForceRoll() => await ExecuteSafe(() => AdminService.PlayLudoRollAsync(RoomId));
+    private async Task DoForceMove(int tIdx) => await ExecuteSafe(() => AdminService.PlayLudoMoveAsync(RoomId, tIdx));
+    private async Task DoRefresh() => await ExecuteSafe(() => Task.CompletedTask);
 
     private async Task ExecuteSafe(Func<Task> action)
     {
         isBusy = true;
         errorMessage = null;
         StateHasChanged();
-        try
-        {
-            await action();
-            await OnRefresh.InvokeAsync();
-        }
-        catch (HttpRequestException ex)
-        {
-            errorMessage = $"Network Error: {ex.Message}";
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            isBusy = false;
-            StateHasChanged();
-        }
+        try { await action(); await OnRefresh.InvokeAsync(); }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { isBusy = false; StateHasChanged(); }
     }
-
 }

@@ -20,13 +20,11 @@ public sealed class LuckyMineModule : IGameModule
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/admin/luckymine").RequireAuthorization("AdminPolicy");
+        var admin = endpoints.MapGroup("/admin/luckymine").RequireAuthorization("AdminPolicy");
 
-        group.MapGet("/{roomId}/state", async (
-            string roomId,
-            IGameRepositoryFactory repoFactory) =>
+        admin.MapGet("/{roomId}/full-state", async (string roomId, IServiceProvider sp) =>
         {
-            var repo = repoFactory.Create<LuckyMineState>(GameName);
+            var repo = sp.GetRequiredService<IGameRepositoryFactory>().Create<LuckyMineState>("LuckyMine");
             var ctx = await repo.LoadAsync(roomId);
 
             if (ctx == null) return Results.NotFound();
@@ -35,7 +33,6 @@ public sealed class LuckyMineModule : IGameModule
             {
                 RevealedMask0 = ctx.State.RevealedMask0,
                 RevealedMask1 = ctx.State.RevealedMask1,
-                JackpotCounter = ctx.State.JackpotCounter,
                 CurrentPlayerIndex = ctx.State.CurrentPlayerIndex,
                 TotalTiles = ctx.State.TotalTiles,
                 RemainingMines = ctx.State.TotalMines,
@@ -48,11 +45,4 @@ public sealed class LuckyMineModule : IGameModule
             return Results.Ok(dto);
         });
     }
-}
-
-[JsonSerializable(typeof(LuckyMineDto))]
-[JsonSerializable(typeof(LuckyMineFullDto))]
-[JsonSerializable(typeof(LuckyMineState))]
-public partial class LuckyMineJsonContext : JsonSerializerContext
-{
 }

@@ -8,30 +8,24 @@ public sealed class LuckyMineRoomService(
     IGameRepositoryFactory repoFactory,
     ILogger<LuckyMineRoomService> logger) : IGameRoomService
 {
-    private readonly IGameRepository<LuckyMineState> _repository
-        = repoFactory.Create<LuckyMineState>("LuckyMine");
+    private readonly IGameRepository<LuckyMineState> _repository = repoFactory.Create<LuckyMineState>("LuckyMine");
 
     public string GameType => "LuckyMine";
 
     public async Task<string> CreateRoomAsync(GameRoomMeta meta)
     {
-        var roomId = GenerateShortId();
+        var roomId = GenerateId();
 
-        var totalTiles = 100;
-        var mineCount = 20;
+        var totalTiles = meta.Config.TryGetValue("TotalTiles", out var tStr) && int.TryParse(tStr, out var t) ? t : 100;
+        var mineCount = meta.Config.TryGetValue("TotalMines", out var mStr) && int.TryParse(mStr, out var m) ? m : 20;
 
-        if (meta.Config.TryGetValue("TotalTiles", out var tilesStr) && int.TryParse(tilesStr, out var t))
-            totalTiles = t;
-        if (meta.Config.TryGetValue("TotalMines", out var minesStr) && int.TryParse(minesStr, out var m)) mineCount = m;
-
-        if (totalTiles > 128) totalTiles = 128;
-        if (mineCount >= totalTiles) mineCount = totalTiles - 1;
+        totalTiles = Math.Clamp(totalTiles, 10, 128);
+        mineCount = Math.Clamp(mineCount, 1, totalTiles - 1);
 
         var state = new LuckyMineState
         {
             TotalTiles = (byte)totalTiles,
             TotalMines = (byte)mineCount,
-            JackpotCounter = (int)(meta.EntryFee * 100),
             EntryCost = (int)meta.EntryFee,
             RewardSlope = 0.5f,
             Status = (byte)LuckyMineStatus.Active
@@ -40,15 +34,12 @@ public sealed class LuckyMineRoomService(
         PopulateMines(ref state, totalTiles, mineCount);
 
         await _repository.SaveAsync(roomId, state, meta);
-        logger.LogInformation("Created LuckyMine room {RoomId} (Mines: {Mines})", roomId, mineCount);
+        logger.LogInformation("Created LuckyMine room {RoomId} (Mines: {Mines}/{Tiles})", roomId, mineCount, totalTiles);
 
         return roomId;
     }
 
-    public async Task DeleteRoomAsync(string roomId)
-    {
-        await _repository.DeleteAsync(roomId);
-    }
+    public async Task DeleteRoomAsync(string roomId) => await _repository.DeleteAsync(roomId);
 
     public async Task<JoinRoomResult> JoinRoomAsync(string roomId, string userId)
     {
@@ -76,25 +67,10 @@ public sealed class LuckyMineRoomService(
         }
     }
 
-    public async Task<GameRoomMeta?> GetRoomMetaAsync(string roomId)
-    {
-        var ctx = await _repository.LoadAsync(roomId);
-        return ctx?.Meta;
-    }
+    public async Task<GameRoomMeta?> GetRoomMetaAsync(string roomId) => (await _repository.LoadAsync(roomId))?.Meta;
 
-    private string GenerateShortId()
-    {
-        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        return string.Create(5, chars, (span, charset) =>
-        {
-            for (var i = 0; i < span.Length; i++) span[i] = charset[RandomNumberGenerator.GetInt32(charset.Length)];
-        });
-    }
+    private string GenerateId() => Convert.ToHexString(RandomNumberGenerator.GetBytes(3));
 
-    /// <summary>
-    ///     Clever algorithm for populating N bits in a range.
-    ///     Uses Fisher-Yates on a virtual index array.
-    /// </summary>
     private void PopulateMines(ref LuckyMineState state, int totalTiles, int mineCount)
     {
         Span<int> indices = stackalloc int[totalTiles];
@@ -102,9 +78,8 @@ public sealed class LuckyMineRoomService(
 
         for (var i = 0; i < mineCount; i++)
         {
-            var j = RandomNumberGenerator.GetInt32(i, totalTiles);
+            var j = Random.Shared.Next(i, totalTiles);
             (indices[i], indices[j]) = (indices[j], indices[i]);
-
             var mineIdx = indices[i];
             if (mineIdx < 64) state.MineMask0 |= 1UL << mineIdx;
             else state.MineMask1 |= 1UL << (mineIdx - 64);

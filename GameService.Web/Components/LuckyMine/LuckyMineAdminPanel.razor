@@ -3,85 +3,47 @@
     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0"><i class="bi bi-grid-3x3 me-2"></i>Lucky Mine God Mode</h5>
         <div>
-            <span class="badge bg-warning text-dark me-2">Jackpot: @Dto?.JackpotCounter</span>
             <span class="badge bg-danger">Mines: @Dto?.RemainingMines</span>
         </div>
     </div>
     <div class="card-body bg-light">
-        <div class="d-flex flex-wrap gap-1 justify-content-center" style="max-width: 800px; margin: 0 auto;">
-            @for (var i = 0; i < Dto?.TotalTiles; i++)
-            {
-                var idx = i;
-                var isRevealed = IsRevealed(idx);
-                var isMine = IsMine(idx);
+        @if (Dto != null)
+        {
+            <div class="d-flex flex-wrap gap-1 justify-content-center" style="max-width: 800px; margin: 0 auto;">
+                @for (var i = 0; i < Dto.TotalTiles; i++)
+                {
+                    var idx = i;
+                    var isRevealed = IsBitSet(idx < 64 ? Dto.RevealedMask0 : Dto.RevealedMask1, idx % 64);
+                    var isMine = IsBitSet(idx < 64 ? Dto.MineMask0 : Dto.MineMask1, idx % 64);
 
-                var bgClass = isRevealed
-                    ? isMine ? "bg-danger text-white border-danger" : "bg-success-subtle text-success border-success"
-                    : "bg-white border-secondary-subtle";
+                    var bgClass = isRevealed
+                        ? isMine ? "bg-danger text-white border-danger" : "bg-success-subtle text-success border-success"
+                        : "bg-white border-secondary-subtle";
 
-                <div class="tile @bgClass shadow-sm" title="Index @idx @(isMine ? "[MINE]" : "")">
-                    @if (isRevealed)
-                    {
-                        if (isMine)
+                    <div class="tile @bgClass shadow-sm" title="Index @idx @(isMine ? "[MINE]" : "")">
+                        @if (isRevealed)
                         {
-                            <i class="bi bi-radioactive fs-5"></i>
+                            if (isMine) { <i class="bi bi-radioactive fs-5"></i> }
+                            else { <span class="fw-bold small">SAFE</span> }
                         }
                         else
                         {
-                            <span class="fw-bold">@CalculateMultiplier(idx)x</span>
+                            if (isMine) { <i class="bi bi-bomb-fill text-danger opacity-50"></i> }
+                            else { <span class="small text-muted opacity-25">@idx</span> }
                         }
-                    }
-                    else
-                    {
-                        if (isMine)
-                        {
-                            <i class="bi bi-bomb-fill text-danger opacity-50"></i>
-                        }
-                        else
-                        {
-                            <span class="small text-muted opacity-25">@idx</span>
-                        }
-                    }
-                </div>
-            }
-        </div>
+                    </div>
+                }
+            </div>
+        }
     </div>
 </div>
 
 <style>
-    .tile {
-        width: 40px;
-        height: 40px;
-        border-radius: 6px;
-        border: 1px solid;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: default;
-        transition: all 0.2s;
-    }
+    .tile { width: 40px; height: 40px; border-radius: 6px; border: 1px solid; display: flex; align-items: center; justify-content: center; cursor: default; transition: all 0.2s; }
 </style>
 
 @code {
     [Parameter] public LuckyMineFullDto? Dto { get; set; }
 
-    private bool IsRevealed(int index)
-    {
-        if (Dto == null) return false;
-        if (index < 64) return (Dto.RevealedMask0 & (1UL << index)) != 0;
-        return (Dto.RevealedMask1 & (1UL << (index - 64))) != 0;
-    }
-
-    private bool IsMine(int index)
-    {
-        if (Dto == null) return false;
-        if (index < 64) return (Dto.MineMask0 & (1UL << index)) != 0;
-        return (Dto.MineMask1 & (1UL << (index - 64))) != 0;
-    }
-
-    private string CalculateMultiplier(int idx)
-    {
-        return "1.5";
-    }
-
+    private bool IsBitSet(ulong mask, int bit) => (mask & (1UL << bit)) != 0;
 }

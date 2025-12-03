@@ -4,23 +4,14 @@ using Microsoft.Extensions.Logging;
 
 namespace GameService.Ludo;
 
-/// <summary>
-///     Ludo room service for room lifecycle management.
-///     Uses the generic repository pattern.
-/// </summary>
 public sealed class LudoRoomService : IGameRoomService
 {
     private readonly ILogger<LudoRoomService> _logger;
     private readonly IGameRepository<LudoState> _repository;
-    private readonly IRoomRegistry _roomRegistry;
 
-    public LudoRoomService(
-        IGameRepositoryFactory repositoryFactory,
-        IRoomRegistry roomRegistry,
-        ILogger<LudoRoomService> logger)
+    public LudoRoomService(IGameRepositoryFactory factory, ILogger<LudoRoomService> logger)
     {
-        _repository = repositoryFactory.Create<LudoState>(GameType);
-        _roomRegistry = roomRegistry;
+        _repository = factory.Create<LudoState>("Ludo");
         _logger = logger;
     }
 
@@ -28,94 +19,54 @@ public sealed class LudoRoomService : IGameRoomService
 
     public async Task<string> CreateRoomAsync(GameRoomMeta meta)
     {
-        var roomId = GenerateShortId();
-
+        var roomId = GenerateId();
         var engine = new LudoEngine(new ServerDiceRoller());
         engine.InitNewGame(meta.MaxPlayers);
-
-        if (engine.State.Winner == 0) engine.State.Winner = 255;
-
+        
         await _repository.SaveAsync(roomId, engine.State, meta);
         _logger.LogInformation("Created Ludo room {RoomId}", roomId);
         return roomId;
     }
 
-    public async Task DeleteRoomAsync(string roomId)
-    {
-        await _repository.DeleteAsync(roomId);
-        _logger.LogInformation("Deleted Ludo room {RoomId}", roomId);
-    }
-
     public async Task<JoinRoomResult> JoinRoomAsync(string roomId, string userId)
     {
         var ctx = await _repository.LoadAsync(roomId);
-        if (ctx == null)
-            return JoinRoomResult.Error("Room not found");
+        if (ctx == null) return JoinRoomResult.Error("Room not found");
 
-        if (ctx.Meta.PlayerSeats.TryGetValue(userId, out var existingSeat))
-            return JoinRoomResult.Ok(existingSeat);
+        if (ctx.Meta.PlayerSeats.TryGetValue(userId, out var seat)) return JoinRoomResult.Ok(seat);
+        if (ctx.Meta.PlayerSeats.Count >= ctx.Meta.MaxPlayers) return JoinRoomResult.Error("Room full");
 
-        if (ctx.Meta.PlayerSeats.Count >= ctx.Meta.MaxPlayers)
-            return JoinRoomResult.Error("Room is full");
-
-        var takenSeats = ctx.Meta.PlayerSeats.Values.ToHashSet();
-        var seatIndex = -1;
-
-        for (var i = 0; i < 4; i++)
+        var taken = ctx.Meta.PlayerSeats.Values.ToHashSet();
+        int newSeat = -1;
+        
+        for (int i = 0; i < 4; i++)
         {
-            var isSeatActive = (ctx.State.ActiveSeats & (1 << i)) != 0;
-
-            if (isSeatActive && !takenSeats.Contains(i))
+            if ((ctx.State.ActiveSeats & (1 << i)) != 0 && !taken.Contains(i))
             {
-                seatIndex = i;
-                break;
+                newSeat = i; break;
             }
         }
 
-        if (seatIndex == -1)
-            return JoinRoomResult.Error("No available seats");
+        if (newSeat == -1) return JoinRoomResult.Error("No seats available");
 
-        var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats)
-        {
-            [userId] = seatIndex
-        };
+        var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats) { [userId] = newSeat };
+        await _repository.SaveAsync(roomId, ctx.State, ctx.Meta with { PlayerSeats = newSeats });
 
-        var newMeta = ctx.Meta with { PlayerSeats = newSeats };
-        await _repository.SaveAsync(roomId, ctx.State, newMeta);
-
-        _logger.LogInformation("Player {UserId} joined room {RoomId} at seat {Seat}", userId, roomId, seatIndex);
-
-        return JoinRoomResult.Ok(seatIndex);
+        return JoinRoomResult.Ok(newSeat);
     }
 
-    public async Task LeaveRoomAsync(string roomId, string userId)
+    public async Task DeleteRoomAsync(string roomId) => await _repository.DeleteAsync(roomId);
+    public async Task LeaveRoomAsync(string roomId, string userId) 
     {
         var ctx = await _repository.LoadAsync(roomId);
-        if (ctx == null) return;
-
-        if (!ctx.Meta.PlayerSeats.ContainsKey(userId)) return;
-
-        var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats);
-        newSeats.Remove(userId);
-
-        var newMeta = ctx.Meta with { PlayerSeats = newSeats };
-        await _repository.SaveAsync(roomId, ctx.State, newMeta);
-
-        _logger.LogInformation("Player {UserId} left room {RoomId}", userId, roomId);
-    }
-
-    public async Task<GameRoomMeta?> GetRoomMetaAsync(string roomId)
-    {
-        var ctx = await _repository.LoadAsync(roomId);
-        return ctx?.Meta;
-    }
-
-    private string GenerateShortId()
-    {
-        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        return string.Create(6, chars, (span, charset) =>
+        if (ctx != null && ctx.Meta.PlayerSeats.ContainsKey(userId))
         {
-            for (var i = 0; i < span.Length; i++) span[i] = charset[RandomNumberGenerator.GetInt32(charset.Length)];
-        });
+             var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats);
+             newSeats.Remove(userId);
+             await _repository.SaveAsync(roomId, ctx.State, ctx.Meta with { PlayerSeats = newSeats });
+        }
     }
+    public async Task<GameRoomMeta?> GetRoomMetaAsync(string roomId) => (await _repository.LoadAsync(roomId))?.Meta;
+
+    private string GenerateId() => Convert.ToHexString(RandomNumberGenerator.GetBytes(3));
 }

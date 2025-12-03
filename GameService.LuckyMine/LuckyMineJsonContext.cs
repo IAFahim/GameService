@@ -1,9 +1,11 @@
 using System.Text.Json.Serialization;
 using GameService.GameCore;
 
-namespace GameService.Ludo;
+namespace GameService.LuckyMine;
 
-[JsonSerializable(typeof(LudoStateDto))]
+[JsonSerializable(typeof(LuckyMineDto))]
+[JsonSerializable(typeof(LuckyMineFullDto))]
+[JsonSerializable(typeof(LuckyMineState))]
 [JsonSerializable(typeof(GameRoomMeta))]
 [JsonSerializable(typeof(GameStateResponse))]
 [JsonSerializable(typeof(GameActionResult))]
@@ -12,6 +14,6 @@ namespace GameService.Ludo;
 [JsonSerializable(typeof(JoinRoomResult))]
 [JsonSerializable(typeof(GameRoomDto))]
 [JsonSerializable(typeof(List<string>))]
-public partial class LudoJsonContext : JsonSerializerContext
+public partial class LuckyMineJsonContext : JsonSerializerContext
 {
 }

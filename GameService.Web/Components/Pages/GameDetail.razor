@@ -27,16 +27,35 @@
     }
     else if (ludoState != null)
     {
+        <!-- Header Info -->
+        <div class="alert @(ludoState.IsGameOver ? "alert-success" : "alert-info")">
+            @if (ludoState.IsGameOver)
+            {
+                <h4><i class="bi bi-trophy-fill me-2"></i>Game Over!</h4>
+            }
+            else
+            {
+                <h4>Current Turn: Player @ludoState.CurrentPlayer</h4>
+                <div class="d-flex gap-3">
+                    <span><i class="bi bi-dice-6 me-1"></i>Last Roll: @(ludoState.LastDiceRoll == 0 ? "-" : ludoState.LastDiceRoll)</span>
+                    <span><i class="bi bi-clock-history me-1"></i>Turn ID: @ludoState.TurnId</span>
+                </div>
+            }
+        </div>
+
         <LudoAdminPanel RoomId="@RoomId" State="ludoState" OnRefresh="LoadGame"/>
     }
     else if (luckyMineState != null)
     {
-        <!-- Pass the FULL Dto here -->
+        <div class="alert @(luckyMineState.Status == "Active" ? "alert-info" : "alert-warning")">
+            Status: <strong>@luckyMineState.Status</strong> | 
+            Mines: @luckyMineState.RemainingMines / @luckyMineState.TotalTiles
+        </div>
+        
         <LuckyMineAdminPanel Dto="luckyMineState"/>
     }
     else if (!string.IsNullOrEmpty(rawJson))
     {
-        <!-- Fallback for other game types or raw view -->
         <div class="alert alert-warning">
             Visual inspector not available for this game type. Showing raw data.
         </div>
@@ -57,9 +76,7 @@
     private string? gameType;
     private string? rawJson;
     private LudoStateDto? ludoState;
-
     private LuckyMineFullDto? luckyMineState;
-
 
     protected override async Task OnInitializedAsync()
     {
@@ -120,21 +137,22 @@
             if (!root.TryGetProperty("state", out var stateEl))
                 return null;
 
+            // Handle byte[] tokens (Base64 string in JSON)
             var tokens = new byte[16];
             if (stateEl.TryGetProperty("tokens", out var tokensProp))
             {
-                if (tokensProp.ValueKind == JsonValueKind.Array)
+                if (tokensProp.ValueKind == JsonValueKind.String)
+                {
+                    var tokenBytes = tokensProp.GetBytesFromBase64();
+                    Array.Copy(tokenBytes, tokens, Math.Min(tokenBytes.Length, 16));
+                }
+                else if (tokensProp.ValueKind == JsonValueKind.Array)
                 {
                     var i = 0;
                     foreach (var token in tokensProp.EnumerateArray())
                     {
-                        if (i < 16) tokens[i++] = (byte)token.GetInt32();
+                        if (i < 16) tokens[i++] = token.GetByte();
                     }
-                }
-                else if (tokensProp.ValueKind == JsonValueKind.String)
-                {
-                    var tokenBytes = tokensProp.GetBytesFromBase64();
-                    Array.Copy(tokenBytes, tokens, Math.Min(tokenBytes.Length, 16));
                 }
             }
 
@@ -143,14 +161,16 @@
                 CurrentPlayer = stateEl.GetProperty("currentPlayer").GetInt32(),
                 LastDiceRoll = stateEl.GetProperty("lastDiceRoll").GetInt32(),
                 TurnId = stateEl.GetProperty("turnId").GetInt32(),
-                Winner = stateEl.GetProperty("winner").GetInt32(),
-                ActiveSeatsBinary = stateEl.TryGetProperty("activeSeatsBinary", out var asb)
-                    ? asb.GetString() ?? "0000"
-                    : "0000",
+                ConsecutiveSixes = stateEl.TryGetProperty("consecutiveSixes", out var cs) ? cs.GetInt32() : 0,
+                IsGameOver = stateEl.TryGetProperty("isGameOver", out var igo) && igo.GetBoolean(),
+                
+                // Optimized Fields
+                ActiveSeatsMask = stateEl.TryGetProperty("activeSeatsMask", out var asm) ? asm.GetByte() : (byte)0,
+                FinishedMask = stateEl.TryGetProperty("finishedMask", out var fm) ? fm.GetByte() : (byte)0,
+                LegalMovesMask = stateEl.TryGetProperty("legalMovesMask", out var lmm) ? lmm.GetByte() : (byte)0,
+                WinnersPacked = stateEl.TryGetProperty("winnersPacked", out var wp) ? wp.GetUInt32() : 0,
+                
                 Tokens = tokens,
-                ConsecutiveSixes = stateEl.TryGetProperty("consecutiveSixes", out var cs)
-                    ? cs.GetInt32()
-                    : 0
             };
         }
         catch (Exception ex)
@@ -165,5 +185,4 @@
         await AdminService.DeleteGameAsync(RoomId);
         Nav.NavigateTo("games");
     }
-
 }

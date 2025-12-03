@@ -1,6 +1,6 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using GameService.GameCore;
 
 namespace GameService.Ludo;
 
@@ -10,88 +10,97 @@ public static class LudoConstants
     public const byte PosBase = 0;
     public const byte PosStart = 1;
     public const byte PosEndMain = 51;
-    public const byte PosHomeStretchStart = 52;
     public const byte PosHome = 57;
     public const byte EntryDice = 6;
     public const byte MaxConsecutiveSixes = 3;
-    public const int TrackLength = 52;
+    public const int GlobalTrackLength = 52; 
     public const int QuadrantSize = 13;
 }
 
 [InlineArray(16)]
 public struct TokenBuffer
 {
-    private byte _element0;
+    public byte _element0;
 }
 
-[StructLayout(LayoutKind.Explicit, Size = 28)]
-public struct LudoState : IGameState
+[InlineArray(4)]
+public struct WinnerBuffer
+{
+    public byte _element0;
+}
+
+[StructLayout(LayoutKind.Explicit, Size = 36)]
+public struct LudoState
 {
     [FieldOffset(0)] public TokenBuffer Tokens;
-    [FieldOffset(16)] public byte CurrentPlayer;
-    [FieldOffset(17)] public byte LastDiceRoll;
-    [FieldOffset(18)] public byte ConsecutiveSixes;
-    [FieldOffset(19)] public byte Winner;
-    [FieldOffset(20)] public int TurnId;
-    [FieldOffset(24)] public byte ActiveSeats;
+    [FieldOffset(16)] public WinnerBuffer Winners;
+    [FieldOffset(20)] public byte CurrentPlayer;
+    [FieldOffset(21)] public byte LastDiceRoll;
+    [FieldOffset(22)] public byte ConsecutiveSixes;
+    [FieldOffset(23)] public byte FinishedMask;
+    [FieldOffset(24)] public byte WinnersCount; 
+    [FieldOffset(25)] public byte ActiveSeats;
+    [FieldOffset(28)] public int TurnId;
 
-    public byte GetTokenPos(int player, int tokenIndex)
-    {
-        return Tokens[(player << 2) + tokenIndex];
-    }
-
-    public void SetTokenPos(int player, int tokenIndex, byte pos)
-    {
-        Tokens[(player << 2) + tokenIndex] = pos;
-    }
+    public byte GetTokenPos(int player, int tokenIndex) => Tokens[(player << 2) + tokenIndex];
+    public void SetTokenPos(int player, int tokenIndex, byte pos) => Tokens[(player << 2) + tokenIndex] = pos;
 
     public void AdvanceTurnPointer()
     {
-        if (ActiveSeats == 0) return;
+        int activeCount = BitOperations.PopCount(ActiveSeats);
+        if (WinnersCount >= (activeCount > 1 ? activeCount - 1 : 1)) return;
+
         var attempts = 0;
         do
         {
             CurrentPlayer = (byte)((CurrentPlayer + 1) & 3);
             attempts++;
-        } while ((ActiveSeats & (1 << CurrentPlayer)) == 0 && attempts < 4);
+        } while (
+            ((ActiveSeats & (1 << CurrentPlayer)) == 0 || (FinishedMask & (1 << CurrentPlayer)) != 0) 
+            && attempts < 5
+        );
+    }
+
+    public bool IsGameOver()
+    {
+        int activeCount = BitOperations.PopCount(ActiveSeats);
+        return WinnersCount >= (activeCount > 1 ? activeCount - 1 : 1);
     }
 }
 
+[Flags]
 public enum LudoStatus : short
 {
     None = 0,
     Success = 1 << 0,
     ExtraTurn = 1 << 1,
     CapturedOpponent = 1 << 2,
-    GameWon = 1 << 3,
+    PlayerFinished = 1 << 3,
     TurnPassed = 1 << 4,
     ForfeitTurn = 1 << 5,
     ErrorGameEnded = 1 << 6,
     ErrorNotYourTurn = 1 << 7,
     ErrorNeedToRoll = 1 << 8,
-    ErrorTokenInBase = 1 << 11
+    ErrorTokenInBase = 1 << 9,
+    ErrorTokenFinished = 1 << 10,
+    ErrorInvalidMove = 1 << 11
 }
 
 public record struct RollResult(LudoStatus Status, byte DiceValue);
-
 public record struct MoveResult(LudoStatus Status, byte NewPos, int CapturedPid = -1, int CapturedTid = -1);
 
-public class LudoEngine(IDiceRoller roller)
+public class LudoEngine
 {
-    public LudoState State;
+    public LudoState State; 
+    
+    private readonly IDiceRoller _roller;
 
-    public LudoEngine(LudoState state, IDiceRoller roller) : this(roller)
-    {
-        State = state;
-    }
+    public LudoEngine(IDiceRoller roller) => _roller = roller;
 
     public void InitNewGame(int playerCount)
     {
-        for (var i = 0; i < 16; i++) State.Tokens[i] = 0;
-
-        State.CurrentPlayer = 0;
-        State.LastDiceRoll = 0;
-        State.Winner = 255;
+        State = default; 
+        for (var i = 0; i < 4; i++) State.Winners[i] = 255;
         State.TurnId = 1;
 
         State.ActiveSeats = playerCount switch
@@ -106,19 +115,10 @@ public class LudoEngine(IDiceRoller roller)
 
     public bool TryRollDice(out RollResult result, byte? forcedDice = null)
     {
-        if (State.Winner != 255)
-        {
-            result = new RollResult(LudoStatus.ErrorGameEnded, 0);
-            return false;
-        }
+        if (State.IsGameOver()) { result = new(LudoStatus.ErrorGameEnded, 0); return false; }
+        if (State.LastDiceRoll != 0) { result = new(LudoStatus.ErrorNeedToRoll, State.LastDiceRoll); return false; }
 
-        if (State.LastDiceRoll != 0)
-        {
-            result = new RollResult(LudoStatus.ErrorNeedToRoll, State.LastDiceRoll);
-            return false;
-        }
-
-        var dice = forcedDice ?? roller.Roll();
+        var dice = forcedDice ?? _roller.Roll();
         State.LastDiceRoll = dice;
 
         if (dice == 6)
@@ -127,7 +127,7 @@ public class LudoEngine(IDiceRoller roller)
             if (State.ConsecutiveSixes >= LudoConstants.MaxConsecutiveSixes)
             {
                 EndTurn(true);
-                result = new RollResult(LudoStatus.ForfeitTurn, dice);
+                result = new(LudoStatus.ForfeitTurn, dice);
                 return true;
             }
         }
@@ -136,60 +136,83 @@ public class LudoEngine(IDiceRoller roller)
             State.ConsecutiveSixes = 0;
         }
 
-        if (!CanMoveAnyToken(dice))
+        if (GetLegalMovesMask() == 0)
         {
-            var bonus = dice == 6;
-            EndTurn(!bonus);
-            result = new RollResult(bonus ? LudoStatus.Success : LudoStatus.TurnPassed, dice);
+            EndTurn(true); 
+            result = new(LudoStatus.TurnPassed, dice);
             return true;
         }
 
-        result = new RollResult(LudoStatus.Success, dice);
+        result = new(LudoStatus.Success | (dice == 6 ? LudoStatus.ExtraTurn : LudoStatus.None), dice);
         return true;
     }
 
     public bool TryMoveToken(int tIdx, out MoveResult result)
     {
-        if (State.LastDiceRoll == 0)
+        if (State.LastDiceRoll == 0) { result = new(LudoStatus.ErrorNeedToRoll, 0); return false; }
+        
+        int p = State.CurrentPlayer;
+        byte curPos = State.GetTokenPos(p, tIdx);
+
+        if (curPos == LudoConstants.PosHome) { result = new(LudoStatus.ErrorTokenFinished, curPos); return false; }
+
+        if (!PredictMove(curPos, State.LastDiceRoll, out var nextPos))
         {
-            result = new MoveResult(LudoStatus.ErrorNeedToRoll, 0);
+            var err = curPos == LudoConstants.PosBase ? LudoStatus.ErrorTokenInBase : LudoStatus.ErrorInvalidMove;
+            result = new(err, curPos);
             return false;
         }
 
-        int pIdx = State.CurrentPlayer;
-        var curPos = State.GetTokenPos(pIdx, tIdx);
-
-        if (!PredictMove(pIdx, curPos, State.LastDiceRoll, out var nextPos))
-        {
-            result = new MoveResult(LudoStatus.ErrorTokenInBase, curPos);
-            return false;
-        }
-
-        State.SetTokenPos(pIdx, tIdx, nextPos);
+        State.SetTokenPos(p, tIdx, nextPos);
         var status = LudoStatus.Success;
+        int capPid = -1, capTid = -1;
 
-        if (CheckWin(pIdx))
+        if (nextPos <= LudoConstants.PosEndMain && TryCapture(p, nextPos, out capPid, out capTid))
         {
-            State.Winner = (byte)pIdx;
-            status |= LudoStatus.GameWon;
+            status |= LudoStatus.CapturedOpponent | LudoStatus.ExtraTurn;
+            State.SetTokenPos(capPid, capTid, LudoConstants.PosBase);
         }
 
-        int capPid = -1, capTid = -1;
-        if (TryCapture(pIdx, nextPos, out capPid, out capTid))
+        if (CheckPlayerFinished(p))
         {
-            status |= LudoStatus.CapturedOpponent;
-            status |= LudoStatus.ExtraTurn;
-            State.SetTokenPos(capPid, capTid, LudoConstants.PosBase);
+            status |= LudoStatus.PlayerFinished;
+            State.Winners[State.WinnersCount++] = (byte)p;
+            State.FinishedMask |= (byte)(1 << p);
+            
+            EndTurn(true); 
+            
+            if (State.IsGameOver())
+            {
+                FillLastLoser();
+                status |= LudoStatus.ErrorGameEnded;
+            }
+            
+            result = new(status, nextPos, capPid, capTid);
+            return true;
         }
 
         if (State.LastDiceRoll == 6) status |= LudoStatus.ExtraTurn;
 
-        result = new MoveResult(status, nextPos, capPid, capTid);
+        result = new(status, nextPos, capPid, capTid);
 
-        if ((status & LudoStatus.GameWon) == 0)
+        if ((status & LudoStatus.PlayerFinished) == 0)
+        {
             EndTurn((status & LudoStatus.ExtraTurn) == 0);
+        }
 
         return true;
+    }
+
+    public byte GetLegalMovesMask()
+    {
+        if (State.LastDiceRoll == 0) return 0;
+        int mask = 0;
+        int p = State.CurrentPlayer;
+        if (PredictMove(State.GetTokenPos(p, 0), State.LastDiceRoll, out _)) mask |= 1;
+        if (PredictMove(State.GetTokenPos(p, 1), State.LastDiceRoll, out _)) mask |= 2;
+        if (PredictMove(State.GetTokenPos(p, 2), State.LastDiceRoll, out _)) mask |= 4;
+        if (PredictMove(State.GetTokenPos(p, 3), State.LastDiceRoll, out _)) mask |= 8;
+        return (byte)mask;
     }
 
     private void EndTurn(bool advance)
@@ -203,94 +226,70 @@ public class LudoEngine(IDiceRoller roller)
         }
     }
 
-    private bool CanMoveAnyToken(byte dice)
+    private void FillLastLoser()
     {
-        for (var i = 0; i < 4; i++)
-            if (PredictMove(State.CurrentPlayer, State.GetTokenPos(State.CurrentPlayer, i), dice, out _))
-                return true;
-        return false;
+        int active = BitOperations.PopCount(State.ActiveSeats);
+        if (State.WinnersCount >= active) return;
+        
+        for (int i = 0; i < 4; i++)
+        {
+            if ((State.ActiveSeats & (1 << i)) != 0 && (State.FinishedMask & (1 << i)) == 0)
+            {
+                State.Winners[State.WinnersCount++] = (byte)i;
+                State.FinishedMask |= (byte)(1 << i);
+                break;
+            }
+        }
     }
 
-    private bool PredictMove(int pIdx, byte cur, byte dice, out byte next)
+    private bool PredictMove(byte cur, byte dice, out byte next)
     {
         next = cur;
         if (cur == LudoConstants.PosHome) return false;
         if (cur == LudoConstants.PosBase)
         {
-            if (dice == 6)
-            {
-                next = LudoConstants.PosStart;
-                return true;
-            }
-
+            if (dice == LudoConstants.EntryDice) { next = LudoConstants.PosStart; return true; }
             return false;
         }
-
-        var potential = cur + dice;
-        if (potential > LudoConstants.PosHome) return false;
-        next = (byte)potential;
+        int pot = cur + dice;
+        if (pot > LudoConstants.PosHome) return false;
+        next = (byte)pot;
         return true;
     }
 
-    private bool CheckWin(int pIdx)
+    private bool CheckPlayerFinished(int pIdx)
     {
-        for (var i = 0; i < 4; i++)
-            if (State.GetTokenPos(pIdx, i) != LudoConstants.PosHome)
-                return false;
+        for (int i = 0; i < 4; i++) if (State.GetTokenPos(pIdx, i) != LudoConstants.PosHome) return false;
         return true;
     }
 
-    private bool TryCapture(int myPid, byte myPos, out int vPid, out int vTid)
+    private int GetGlobalPos(int p, byte local)
     {
-        vPid = -1;
-        vTid = -1;
+        if (local == 0 || local > LudoConstants.PosEndMain) return -1;
+        return (local - 1 + (p * LudoConstants.QuadrantSize)) % LudoConstants.GlobalTrackLength;
+    }
 
-        if (myPos == LudoConstants.PosBase || myPos == LudoConstants.PosHome) return false;
+    private bool TryCapture(int myPid, byte myLocal, out int vPid, out int vTid)
+    {
+        vPid = vTid = -1;
+        int myGlob = GetGlobalPos(myPid, myLocal);
+        if (myGlob == -1 || (myGlob % 13) == 0) return false;
 
-        for (var pid = 0; pid < LudoConstants.PlayerCount; pid++)
+        for (int p = 0; p < 4; p++)
         {
-            if (pid == myPid) continue;
-
-            for (var tid = 0; tid < 4; tid++)
-                if (State.GetTokenPos(pid, tid) == myPos)
+            if (p == myPid || (State.ActiveSeats & (1 << p)) == 0 || (State.FinishedMask & (1 << p)) != 0) continue;
+            for (int t = 0; t < 4; t++)
+            {
+                if (GetGlobalPos(p, State.GetTokenPos(p, t)) == myGlob)
                 {
-                    vPid = pid;
-                    vTid = tid;
+                    vPid = p; vTid = t;
                     return true;
                 }
+            }
         }
-
         return false;
     }
-
-    public List<int> GetLegalMoves()
-    {
-        var moves = new List<int>();
-        if (State.LastDiceRoll == 0) return moves;
-
-        for (var i = 0; i < 4; i++)
-        {
-            var pos = State.GetTokenPos(State.CurrentPlayer, i);
-            if (PredictMove(State.CurrentPlayer, pos, State.LastDiceRoll, out _)) moves.Add(i);
-        }
-
-        return moves;
-    }
 }
 
-public interface IDiceRoller
-{
-    byte Roll();
-}
-
-/// <summary>
-///     Thread-safe dice roller using Random.Shared (modern .NET).
-///     Random.Shared is thread-safe and much faster than RandomNumberGenerator for non-cryptographic use.
-/// </summary>
-public class ServerDiceRoller : IDiceRoller
-{
-    public byte Roll()
-    {
-        return (byte)Random.Shared.Next(1, 7);
-    }
-}
+public interface IDiceRoller { byte Roll(); }
+public class ServerDiceRoller : IDiceRoller { public byte Roll() => (byte)Random.Shared.Next(1, 7); }

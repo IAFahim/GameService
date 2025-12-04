@@ -46,4 +46,19 @@ public interface IRoomRegistry
     ///     Release a distributed lock for a room
     /// </summary>
     Task ReleaseLockAsync(string roomId);
+
+    /// <summary>
+    ///     Track which room a user is currently in (O(1) lookup on disconnect)
+    /// </summary>
+    Task SetUserRoomAsync(string userId, string roomId);
+
+    /// <summary>
+    ///     Get the room a user is currently in
+    /// </summary>
+    Task<string?> GetUserRoomAsync(string userId);
+
+    /// <summary>
+    ///     Remove user→room mapping when user leaves
+    /// </summary>
+    Task RemoveUserRoomAsync(string userId);
 }

@@ -125,11 +125,20 @@ public class EconomyService(
 
                 await transaction.CommitAsync();
 
-                _ = Task.Run(() => publisher.PublishPlayerUpdatedAsync(new PlayerUpdatedMessage(
-                    userId,
-                    newBalance,
-                    null,
-                    null)));
+                // Publish event after commit - best effort with error logging
+                // Event loss is acceptable as UI can refresh, but we log failures
+                try
+                {
+                    await publisher.PublishPlayerUpdatedAsync(new PlayerUpdatedMessage(
+                        userId,
+                        newBalance,
+                        null,
+                        null));
+                }
+                catch (Exception pubEx)
+                {
+                    logger.LogWarning(pubEx, "Failed to publish player update event for user {UserId}. UI may be stale.", userId);
+                }
 
                 return new TransactionResult(true, newBalance);
             }

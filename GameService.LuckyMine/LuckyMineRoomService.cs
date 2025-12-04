@@ -48,29 +48,50 @@ public sealed class LuckyMineRoomService(
 
     public async Task<JoinRoomResult> JoinRoomAsync(string roomId, string userId)
     {
-        var ctx = await _repository.LoadAsync(roomId);
-        if (ctx == null) return JoinRoomResult.Error("Room not found");
+        // Acquire lock to prevent race conditions
+        if (!await _repository.TryAcquireLockAsync(roomId, TimeSpan.FromSeconds(5)))
+            return JoinRoomResult.Error("Room is busy. Please try again.");
 
-        // Already in the game
-        if (ctx.Meta.PlayerSeats.TryGetValue(userId, out var seat)) return JoinRoomResult.Ok(seat);
-        
-        // Single player - only one player allowed
-        if (ctx.Meta.PlayerSeats.Count >= 1) return JoinRoomResult.Error("Room already has a player");
+        try
+        {
+            var ctx = await _repository.LoadAsync(roomId);
+            if (ctx == null) return JoinRoomResult.Error("Room not found");
 
-        var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats) { [userId] = 0 };
+            // Already in the game
+            if (ctx.Meta.PlayerSeats.TryGetValue(userId, out var seat)) return JoinRoomResult.Ok(seat);
+            
+            // Single player - only one player allowed
+            if (ctx.Meta.PlayerSeats.Count >= 1) return JoinRoomResult.Error("Room already has a player");
 
-        await _repository.SaveAsync(roomId, ctx.State, ctx.Meta with { PlayerSeats = newSeats });
-        return JoinRoomResult.Ok(0);
+            var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats) { [userId] = 0 };
+
+            await _repository.SaveAsync(roomId, ctx.State, ctx.Meta with { PlayerSeats = newSeats });
+            return JoinRoomResult.Ok(0);
+        }
+        finally
+        {
+            await _repository.ReleaseLockAsync(roomId);
+        }
     }
 
     public async Task LeaveRoomAsync(string roomId, string userId)
     {
-        var ctx = await _repository.LoadAsync(roomId);
-        if (ctx != null && ctx.Meta.PlayerSeats.ContainsKey(userId))
+        if (!await _repository.TryAcquireLockAsync(roomId, TimeSpan.FromSeconds(5)))
+            return; // Best effort
+        
+        try
         {
-            var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats);
-            newSeats.Remove(userId);
-            await _repository.SaveAsync(roomId, ctx.State, ctx.Meta with { PlayerSeats = newSeats });
+            var ctx = await _repository.LoadAsync(roomId);
+            if (ctx != null && ctx.Meta.PlayerSeats.ContainsKey(userId))
+            {
+                var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats);
+                newSeats.Remove(userId);
+                await _repository.SaveAsync(roomId, ctx.State, ctx.Meta with { PlayerSeats = newSeats });
+            }
+        }
+        finally
+        {
+            await _repository.ReleaseLockAsync(roomId);
         }
     }
 

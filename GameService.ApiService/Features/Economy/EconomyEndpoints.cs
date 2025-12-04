@@ -24,6 +24,11 @@ public static class EconomyEndpoints
         var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
+        // SECURITY: Users can only debit (spend) coins, not credit themselves
+        // Credits must come from game engines or admin endpoints with valid ReferenceId
+        if (req.Amount > 0)
+            return Results.BadRequest("Users cannot credit coins directly. Use game actions to earn coins.");
+
         var result = await service.ProcessTransactionAsync(userId, req.Amount, req.ReferenceId, req.IdempotencyKey);
 
         if (!result.Success)

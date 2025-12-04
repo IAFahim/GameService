@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using GameService.GameCore;
 using GameService.ServiceDefaults;
@@ -37,8 +38,37 @@ public static class AdminEndpoints
             new GameTemplateDto(t.Id, t.Name, t.GameType, t.MaxPlayers, t.EntryFee, t.ConfigJson)));
     }
 
-    private static async Task<IResult> CreateTemplate([FromBody] CreateTemplateRequest req, GameDbContext db)
+    private static async Task<IResult> CreateTemplate([FromBody] CreateTemplateRequest req, GameDbContext db, ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("AdminEndpoints");
+        
+        // Validate required fields
+        if (string.IsNullOrWhiteSpace(req.Name))
+            return Results.BadRequest("Template name is required");
+        
+        if (string.IsNullOrWhiteSpace(req.GameType))
+            return Results.BadRequest("Game type is required");
+        
+        if (req.MaxPlayers < 1 || req.MaxPlayers > 100)
+            return Results.BadRequest("Max players must be between 1 and 100");
+        
+        if (req.EntryFee < 0)
+            return Results.BadRequest("Entry fee cannot be negative");
+        
+        // Validate ConfigJson if provided
+        if (!string.IsNullOrEmpty(req.ConfigJson))
+        {
+            try
+            {
+                JsonSerializer.Deserialize<Dictionary<string, object>>(req.ConfigJson);
+            }
+            catch (JsonException ex)
+            {
+                logger.LogWarning(ex, "Invalid ConfigJson provided for template {Name}", req.Name);
+                return Results.BadRequest("Invalid configuration JSON format");
+            }
+        }
+        
         var template = new GameRoomTemplate
         {
             Name = req.Name, GameType = req.GameType, MaxPlayers = req.MaxPlayers, EntryFee = req.EntryFee,
@@ -203,13 +233,40 @@ public static class AdminEndpoints
         return Results.Ok(players);
     }
 
-    private static async Task<IResult> UpdatePlayerCoins(string userId, [FromBody] UpdateCoinRequest req,
-        GameDbContext db, IGameEventPublisher publisher)
+    private static async Task<IResult> UpdatePlayerCoins(
+        string userId, 
+        [FromBody] UpdateCoinRequest req,
+        HttpContext httpContext,
+        GameDbContext db, 
+        IGameEventPublisher publisher,
+        ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("AdminEndpoints");
+        var adminId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "api-key-admin";
+        
         var rows = await db.PlayerProfiles.Where(p => p.UserId == userId).ExecuteUpdateAsync(setters =>
             setters.SetProperty(p => p.Coins, p => p.Coins + req.Amount).SetProperty(p => p.Version, Guid.NewGuid()));
         if (rows == 0) return Results.NotFound();
+        
         var profile = await db.PlayerProfiles.Include(p => p.User).AsNoTracking().FirstAsync(p => p.UserId == userId);
+        
+        // Audit log the admin action
+        var auditEntry = new WalletTransaction
+        {
+            UserId = userId,
+            Amount = req.Amount,
+            BalanceAfter = profile.Coins,
+            TransactionType = "AdminAdjust",
+            Description = $"Admin adjustment by {adminId}",
+            ReferenceId = $"ADMIN:{adminId}",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.WalletTransactions.Add(auditEntry);
+        await db.SaveChangesAsync();
+        
+        logger.LogInformation("Admin {AdminId} adjusted coins for user {UserId} by {Amount}. New balance: {Balance}",
+            adminId, userId, req.Amount, profile.Coins);
+        
         await publisher.PublishPlayerUpdatedAsync(new PlayerUpdatedMessage(profile.UserId, profile.Coins,
             profile.User?.UserName, profile.User?.Email));
         return Results.Ok(new { NewBalance = profile.Coins });

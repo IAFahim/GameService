@@ -202,13 +202,16 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
         
         uint wPacked = s.Winners[0] | ((uint)s.Winners[1] << 8) | ((uint)s.Winners[2] << 16) | ((uint)s.Winners[3] << 24);
 
+        // Calculate legal moves mask without needing dice roller (it's only used for rolling, not move calculation)
+        var engine = new LudoEngine(_diceRoller) { State = s };
+        
         return new LudoStateDto
         {
             CurrentPlayer = s.CurrentPlayer, LastDiceRoll = s.LastDiceRoll, TurnId = s.TurnId,
             ConsecutiveSixes = s.ConsecutiveSixes, TurnStartedAt = m.TurnStartedAt, TurnTimeoutSeconds = TurnTimeoutSeconds,
             Tokens = tokens, ActiveSeatsMask = s.ActiveSeats, FinishedMask = s.FinishedMask, WinnersPacked = wPacked,
             IsGameOver = s.IsGameOver(),
-            LegalMovesMask = new LudoEngine(null!) { State = s }.GetLegalMovesMask() 
+            LegalMovesMask = engine.GetLegalMovesMask()
         };
     }
 }

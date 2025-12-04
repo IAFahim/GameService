@@ -6,32 +6,26 @@
 # ==========================================
 # 0. CONFIGURATION & SEEDS
 # ==========================================
-# These values are now configurable via appsettings.json
-# See GameService section in appsettings.Development.json:
-#   - AdminSeed.Email / AdminSeed.Password
-#   - Economy.InitialCoins
-#   - Session.ReconnectionGracePeriodSeconds
-#   - RateLimit.PermitLimit / RateLimit.WindowMinutes
-#   - GameLoop.TickIntervalMs
-#   - Ludo.TurnTimeoutSeconds
-# ==========================================
 @adminEmail = admin@gameservice.com
 @adminPassword = AdminPass123!
+@adminApiKey = DevOnlyAdminKey-ChangeInProduction!
 
+# Dynamic User Credentials
 @userEmail = player_{{$randomInt}}@test.com
 @userPassword = UserPass123!
+@user2Email = player2_{{$randomInt}}@test.com
 
 ###
 # @name HealthCheck
 GET {{host}}/health
 
 # ==========================================
-# 1. AUTHENTICATION (ADMIN & USER)
+# 1. AUTHENTICATION
 # ==========================================
 
 ###
 # @name LoginAdmin
-# Authenticate as the seeded Admin User
+# 1.1 Authenticate as seeded Admin
 POST {{host}}/auth/login
 Content-Type: {{contentType}}
 
@@ -46,8 +40,20 @@ Content-Type: {{contentType}}
 %}
 
 ###
+# @name AdminKeyBypass
+# 1.2 Test API Key Auth (Service-to-Service bypass)
+GET {{host}}/admin/players
+X-Admin-Key: {{adminApiKey}}
+
+> {%
+    client.test("API Key Auth Success", function () {
+        client.assert(response.status === 200, "API Key failed");
+    });
+%}
+
+###
 # @name RegisterUser
-# Register a new standard player
+# 1.3 Register a new standard player
 POST {{host}}/auth/register
 Content-Type: {{contentType}}
 
@@ -58,7 +64,7 @@ Content-Type: {{contentType}}
 
 ###
 # @name LoginUser
-# Authenticate as the new standard player
+# 1.4 Authenticate as the new player
 POST {{host}}/auth/login
 Content-Type: {{contentType}}
 
@@ -73,14 +79,31 @@ Content-Type: {{contentType}}
 %}
 
 ###
+# @name LoginFailure
+# 1.5 Negative Test: Wrong Password
+POST {{host}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{userEmail}}",
+  "password": "WrongPassword!"
+}
+
+> {%
+    client.test("Login Failed as Expected", function () {
+        client.assert(response.status === 401, "Should return 401 Unauthorized");
+    });
+%}
+
+###
 
 # ==========================================
-# 2. PLAYER ECONOMY & PROFILE
+# 2. PLAYER PROFILE & ECONOMY
 # ==========================================
 
 ###
 # @name GetUserProfile
-# Check initial profile state
+# 2.1 Get initial state
 GET {{host}}/game/me
 Authorization: Bearer {{user_token}}
 
@@ -91,14 +114,14 @@ Authorization: Bearer {{user_token}}
 
 ###
 # @name EarnCoins
-# Simulate gameplay earnings via Economy API
+# 2.2 Credit coins (Simulate winning)
 POST {{host}}/game/coins/transaction
 Authorization: Bearer {{user_token}}
 Content-Type: {{contentType}}
 
 {
-  "amount": 500,
-  "referenceId": "daily_bonus",
+  "amount": 1000,
+  "referenceId": "daily_login_bonus",
   "idempotencyKey": "bonus_{{$randomInt}}"
 }
 
@@ -106,31 +129,74 @@ Content-Type: {{contentType}}
     client.test("Balance Increased", function () {
         client.assert(response.body.newBalance > client.global.get("initial_coins"), "Balance did not update");
     });
+    client.global.set("balance_after_earn", response.body.newBalance);
+%}
+
+###
+# @name IdempotencyCheck
+# 2.3 Test Duplicate Transaction (Should fail or return same result)
+# We use a fixed idempotency key here to force the collision logic
+POST {{host}}/game/coins/transaction
+Authorization: Bearer {{user_token}}
+Content-Type: {{contentType}}
+
+{
+  "amount": 500,
+  "referenceId": "duplicate_test",
+  "idempotencyKey": "unique_key_12345"
+}
+
+###
+# @name IdempotencyRetry
+# 2.4 Retry same key - should be Conflict (409) or Success with same balance depending on implementation
+POST {{host}}/game/coins/transaction
+Authorization: Bearer {{user_token}}
+Content-Type: {{contentType}}
+
+{
+  "amount": 500,
+  "referenceId": "duplicate_test",
+  "idempotencyKey": "unique_key_12345"
+}
+
+> {%
+    client.test("Idempotency Catch", function () {
+        // Your code returns 409 Conflict for duplicates
+        client.assert(response.status === 409, "Should return 409 Conflict for duplicate key");
+    });
+%}
+
+###
+# @name InsufficientFunds
+# 2.5 Negative Test: Debit more than available
+POST {{host}}/game/coins/transaction
+Authorization: Bearer {{user_token}}
+Content-Type: {{contentType}}
+
+{
+  "amount": -99999999,
+  "referenceId": "bad_bet"
+}
+
+> {%
+    client.test("Insufficient Funds Catch", function () {
+        client.assert(response.status === 400 || response.status === 409, "Should return Error");
+    });
 %}
 
 ###
 # @name GetTransactionHistory
-# Verify ledger logging
+# 2.6 View Ledger
 GET {{host}}/game/coins/history?page=1&pageSize=10
 Authorization: Bearer {{user_token}}
 
 # ==========================================
-# 3. GAME CATALOG & TEMPLATES (ADMIN)
+# 3. GAME TEMPLATES (ADMIN)
 # ==========================================
 
 ###
-# @name GetSupportedGames
-GET {{host}}/games/supported
-Authorization: Bearer {{user_token}}
-
-###
-# @name GetTemplates
-GET {{host}}/admin/templates
-Authorization: Bearer {{admin_token}}
-
-###
 # @name CreateTemplate
-# Create a custom High-Stakes Ludo template
+# 3.1 Create a High Stakes Ludo Template
 POST {{host}}/admin/templates
 Authorization: Bearer {{admin_token}}
 Content-Type: {{contentType}}
@@ -148,6 +214,10 @@ Content-Type: {{contentType}}
 %}
 
 ###
+# @name GetTemplates
+# 3.2 List all templates
+GET {{host}}/admin/templates
+Authorization: Bearer {{admin_token}}
 
 # ==========================================
 # 4. GAME LIFECYCLE: LUDO
@@ -155,7 +225,7 @@ Content-Type: {{contentType}}
 
 ###
 # @name CreateLudoGame
-# Create an Ad-hoc Ludo Game
+# 4.1 Create game from raw parameters
 POST {{host}}/admin/games
 Authorization: Bearer {{admin_token}}
 Content-Type: {{contentType}}
@@ -168,39 +238,54 @@ Content-Type: {{contentType}}
 
 > {%
     client.global.set("ludo_room_id", response.body.roomId);
-    client.log("🎲 Ludo Room Created: " + response.body.roomId);
+    client.log("🎲 Ludo Room: " + response.body.roomId);
 %}
 
 ###
 # @name GetLudoState
-# Check initial state
+# 4.2 Check initial state
 GET {{host}}/admin/games/{{ludo_room_id}}
 Authorization: Bearer {{admin_token}}
 
 ###
 # @name LudoAdminRoll
-# Force a dice roll via Admin API (Simulates gameplay)
+# 4.3 Force a Dice Roll (Admin Override)
 POST {{host}}/admin/ludo/{{ludo_room_id}}/roll
 Authorization: Bearer {{admin_token}}
 
 > {%
     client.test("Roll Successful", function () {
         client.assert(response.status === 200, "Roll failed");
-        client.global.set("dice_value", response.body.newState.state.lastDiceRoll);
+        client.global.set("dice_value", response.body.newState.lastDiceRoll);
+        client.log("🎲 Rolled: " + response.body.newState.lastDiceRoll);
     });
 %}
 
 ###
 # @name LudoAdminMove
-# Try to move token 0 (Might fail if not valid, but tests the endpoint)
+# 4.4 Try to move token 0. 
+# Note: This might fail if the token is in base and we didn't roll a 6, 
+# but testing the endpoint connectivity is the goal.
 POST {{host}}/admin/ludo/{{ludo_room_id}}/move/0
 Authorization: Bearer {{admin_token}}
 Content-Type: {{contentType}}
 
 ###
-# @name DeleteLudoGame
-DELETE {{host}}/admin/games/{{ludo_room_id}}
+# @name CreateFromTemplate
+# 4.5 Create room using the template we made earlier
+POST {{host}}/admin/games/create-from-template
 Authorization: Bearer {{admin_token}}
+Content-Type: {{contentType}}
+
+{
+  "templateId": {{template_id}}
+}
+
+> {%
+    client.global.set("template_room_id", response.body.roomId);
+%}
+
+###
 
 # ==========================================
 # 5. GAME LIFECYCLE: LUCKY MINE
@@ -208,39 +293,36 @@ Authorization: Bearer {{admin_token}}
 
 ###
 # @name CreateLuckyMineGame
-# Create a Mine game with custom config
+# 5.1 Create Mine game
 POST {{host}}/admin/games
 Authorization: Bearer {{admin_token}}
 Content-Type: {{contentType}}
 
 {
   "gameType": "LuckyMine",
-  "playerCount": 10,
+  "playerCount": 1,
   "entryFee": 50,
   "configJson": "{\"TotalMines\": 5, \"TotalTiles\": 25}"
 }
 
 > {%
     client.global.set("mine_room_id", response.body.roomId);
-    client.log("💣 LuckyMine Room Created: " + response.body.roomId);
+    client.log("💣 LuckyMine Room: " + response.body.roomId);
 %}
 
 ###
 # @name GetLuckyMineState
-# Fetch specific mine state (cheats/god mode view)
+# 5.2 Get Full State (God Mode - see where mines are)
 GET {{host}}/admin/luckymine/{{mine_room_id}}/full-state
 Authorization: Bearer {{admin_token}}
 
 > {%
-    client.test("Mines Configured", function () {
-        client.assert(response.body.remainingMines === 5, "Mine count incorrect");
+    client.test("Mines Revealed", function () {
+        client.assert(response.body.mineMask0 !== undefined, "Mine mask missing");
     });
 %}
 
 ###
-# @name DeleteLuckyMineGame
-DELETE {{host}}/admin/games/{{mine_room_id}}
-Authorization: Bearer {{admin_token}}
 
 # ==========================================
 # 6. ADMIN PLAYER MANAGEMENT
@@ -248,29 +330,35 @@ Authorization: Bearer {{admin_token}}
 
 ###
 # @name GetAllPlayers
+# 6.1 List players
 GET {{host}}/admin/players?page=1&pageSize=20
 Authorization: Bearer {{admin_token}}
 
 ###
 # @name AdminAddCoins
-# Admin gives coins to the user created earlier
+# 6.2 Admin manually gives coins to user
 POST {{host}}/admin/players/{{user_id}}/coins
 Authorization: Bearer {{admin_token}}
 Content-Type: {{contentType}}
 
 {
-  "amount": 10000
+  "amount": 50000
 }
 
 ###
-# @name AdminVerifyBalance
-# Verify the balance update via Admin API response
-GET {{host}}/admin/players
-Authorization: Bearer {{admin_token}}
+# @name VerifyAdminCoins
+GET {{host}}/game/me
+Authorization: Bearer {{user_token}}
+
+> {%
+    client.test("Admin Coins Received", function () {
+        client.assert(response.body.coins > 50000, "Coins not updated");
+    });
+%}
 
 ###
 # @name DeleteUser
-# Soft delete the test user
+# 6.3 Soft delete the test user
 DELETE {{host}}/admin/players/{{user_id}}
 Authorization: Bearer {{admin_token}}
 
@@ -279,7 +367,21 @@ Authorization: Bearer {{admin_token}}
 # ==========================================
 
 ###
+# @name DeleteLudoGame
+DELETE {{host}}/admin/games/{{ludo_room_id}}
+Authorization: Bearer {{admin_token}}
+
+###
+# @name DeleteTemplateGame
+DELETE {{host}}/admin/games/{{template_room_id}}
+Authorization: Bearer {{admin_token}}
+
+###
+# @name DeleteMineGame
+DELETE {{host}}/admin/games/{{mine_room_id}}
+Authorization: Bearer {{admin_token}}
+
+###
 # @name DeleteTemplate
-# Clean up the test template
 DELETE {{host}}/admin/templates/{{template_id}}
 Authorization: Bearer {{admin_token}}

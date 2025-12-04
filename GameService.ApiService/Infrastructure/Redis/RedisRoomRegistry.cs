@@ -3,9 +3,10 @@ using StackExchange.Redis;
 
 namespace GameService.ApiService.Infrastructure.Redis;
 
-public sealed class RedisRoomRegistry(IConnectionMultiplexer redis, ILogger<RedisRoomRegistry> logger) : IRoomRegistry
+public sealed class RedisRoomRegistry(IConnectionMultiplexer redis) : IRoomRegistry
 {
     private const string GlobalRegistryKey = "global:room_registry";
+    private const string UserRoomKey = "global:user_rooms";
     private readonly IDatabase _db = redis.GetDatabase();
 
     public async Task<string?> GetGameTypeAsync(string roomId)
@@ -73,6 +74,22 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis, ILogger<Redi
     public async Task ReleaseLockAsync(string roomId)
     {
         await _db.KeyDeleteAsync(LockKey(roomId));
+    }
+
+    public async Task SetUserRoomAsync(string userId, string roomId)
+    {
+        await _db.HashSetAsync(UserRoomKey, userId, roomId);
+    }
+
+    public async Task<string?> GetUserRoomAsync(string userId)
+    {
+        var roomId = await _db.HashGetAsync(UserRoomKey, userId);
+        return roomId.IsNullOrEmpty ? null : roomId.ToString();
+    }
+
+    public async Task RemoveUserRoomAsync(string userId)
+    {
+        await _db.HashDeleteAsync(UserRoomKey, userId);
     }
 
     private static string GameTypeIndexKey(string gameType)

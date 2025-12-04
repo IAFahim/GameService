@@ -58,18 +58,13 @@ public class GameHub(
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var allRoomIds = await roomRegistry.GetAllRoomIdsAsync();
-
-        foreach (var roomId in allRoomIds)
+        // O(1) lookup instead of iterating all rooms
+        var roomId = await roomRegistry.GetUserRoomAsync(UserId);
+        
+        if (roomId != null)
         {
             var gameType = await roomRegistry.GetGameTypeAsync(roomId);
-            if (gameType == null) continue;
-
-            var engine = serviceProvider.GetKeyedService<IGameEngine>(gameType);
-            if (engine == null) continue;
-
-            var state = await engine.GetStateAsync(roomId);
-            if (state?.Meta.PlayerSeats.ContainsKey(UserId) == true)
+            if (gameType != null)
             {
                 DisconnectedPlayers[UserId] = (roomId, DateTimeOffset.UtcNow);
 
@@ -88,6 +83,8 @@ public class GameHub(
                         var roomService = serviceProvider.GetKeyedService<IGameRoomService>(capturedGameType);
                         if (roomService != null) await roomService.LeaveRoomAsync(capturedRoomId, capturedUserId);
 
+                        await roomRegistry.RemoveUserRoomAsync(capturedUserId);
+
                         var hubContext = serviceProvider.GetRequiredService<IHubContext<GameHub>>();
                         await hubContext.Clients.Group(capturedRoomId).SendAsync("PlayerLeft",
                             new PlayerLeftEvent(capturedUserId, capturedUserName));
@@ -96,8 +93,6 @@ public class GameHub(
                             capturedUserId, capturedRoomId);
                     }
                 });
-
-                break;
             }
         }
 
@@ -189,6 +184,9 @@ public class GameHub(
 
             var roomId = await roomService.CreateRoomAsync(meta);
 
+            // Track user→room mapping for creator
+            await roomRegistry.SetUserRoomAsync(UserId, roomId);
+
             await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
 
             logger.LogInformation("Room {RoomId} created (Type: {GameType}, MaxPlayers: {MaxPlayers}) by {UserId}",
@@ -217,6 +215,9 @@ public class GameHub(
         var result = await roomService.JoinRoomAsync(roomId, UserId);
         if (!result.Success) return new JoinRoomResponse(false, -1, result.ErrorMessage);
 
+        // Track user→room mapping for O(1) disconnect lookup
+        await roomRegistry.SetUserRoomAsync(UserId, roomId);
+
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
 
         await Clients.Group(roomId)
@@ -244,6 +245,9 @@ public class GameHub(
             var roomService = serviceProvider.GetKeyedService<IGameRoomService>(gameType);
             if (roomService != null) await roomService.LeaveRoomAsync(roomId, UserId);
         }
+
+        // Remove user→room mapping
+        await roomRegistry.RemoveUserRoomAsync(UserId);
 
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
         await Clients.Group(roomId).SendAsync("PlayerLeft", new PlayerLeftEvent(UserId, UserName));

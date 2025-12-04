@@ -30,40 +30,61 @@ public sealed class LudoRoomService : IGameRoomService
 
     public async Task<JoinRoomResult> JoinRoomAsync(string roomId, string userId)
     {
-        var ctx = await _repository.LoadAsync(roomId);
-        if (ctx == null) return JoinRoomResult.Error("Room not found");
+        // Acquire lock to prevent race conditions on seat assignment
+        if (!await _repository.TryAcquireLockAsync(roomId, TimeSpan.FromSeconds(5)))
+            return JoinRoomResult.Error("Room is busy. Please try again.");
 
-        if (ctx.Meta.PlayerSeats.TryGetValue(userId, out var seat)) return JoinRoomResult.Ok(seat);
-        if (ctx.Meta.PlayerSeats.Count >= ctx.Meta.MaxPlayers) return JoinRoomResult.Error("Room full");
-
-        var taken = ctx.Meta.PlayerSeats.Values.ToHashSet();
-        int newSeat = -1;
-        
-        for (int i = 0; i < 4; i++)
+        try
         {
-            if ((ctx.State.ActiveSeats & (1 << i)) != 0 && !taken.Contains(i))
+            var ctx = await _repository.LoadAsync(roomId);
+            if (ctx == null) return JoinRoomResult.Error("Room not found");
+
+            if (ctx.Meta.PlayerSeats.TryGetValue(userId, out var seat)) return JoinRoomResult.Ok(seat);
+            if (ctx.Meta.PlayerSeats.Count >= ctx.Meta.MaxPlayers) return JoinRoomResult.Error("Room full");
+
+            var taken = ctx.Meta.PlayerSeats.Values.ToHashSet();
+            int newSeat = -1;
+            
+            for (int i = 0; i < 4; i++)
             {
-                newSeat = i; break;
+                if ((ctx.State.ActiveSeats & (1 << i)) != 0 && !taken.Contains(i))
+                {
+                    newSeat = i; break;
+                }
             }
+
+            if (newSeat == -1) return JoinRoomResult.Error("No seats available");
+
+            var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats) { [userId] = newSeat };
+            await _repository.SaveAsync(roomId, ctx.State, ctx.Meta with { PlayerSeats = newSeats });
+
+            return JoinRoomResult.Ok(newSeat);
         }
-
-        if (newSeat == -1) return JoinRoomResult.Error("No seats available");
-
-        var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats) { [userId] = newSeat };
-        await _repository.SaveAsync(roomId, ctx.State, ctx.Meta with { PlayerSeats = newSeats });
-
-        return JoinRoomResult.Ok(newSeat);
+        finally
+        {
+            await _repository.ReleaseLockAsync(roomId);
+        }
     }
 
     public async Task DeleteRoomAsync(string roomId) => await _repository.DeleteAsync(roomId);
     public async Task LeaveRoomAsync(string roomId, string userId) 
     {
-        var ctx = await _repository.LoadAsync(roomId);
-        if (ctx != null && ctx.Meta.PlayerSeats.ContainsKey(userId))
+        if (!await _repository.TryAcquireLockAsync(roomId, TimeSpan.FromSeconds(5)))
+            return; // Best effort - leave silently fails if locked
+        
+        try
         {
-             var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats);
-             newSeats.Remove(userId);
-             await _repository.SaveAsync(roomId, ctx.State, ctx.Meta with { PlayerSeats = newSeats });
+            var ctx = await _repository.LoadAsync(roomId);
+            if (ctx != null && ctx.Meta.PlayerSeats.ContainsKey(userId))
+            {
+                 var newSeats = new Dictionary<string, int>(ctx.Meta.PlayerSeats);
+                 newSeats.Remove(userId);
+                 await _repository.SaveAsync(roomId, ctx.State, ctx.Meta with { PlayerSeats = newSeats });
+            }
+        }
+        finally
+        {
+            await _repository.ReleaseLockAsync(roomId);
         }
     }
     public async Task<GameRoomMeta?> GetRoomMetaAsync(string roomId) => (await _repository.LoadAsync(roomId))?.Meta;

@@ -50,6 +50,11 @@ namespace GameService.ApiService;
 [JsonSerializable(typeof(WalletTransactionDto))]
 [JsonSerializable(typeof(List<WalletTransactionDto>))]
 [JsonSerializable(typeof(PagedResult<WalletTransactionDto>))]
+[JsonSerializable(typeof(UpdateProfileRequest))]
+[JsonSerializable(typeof(QuickMatchRequest))]
+[JsonSerializable(typeof(QuickMatchResponse))]
+[JsonSerializable(typeof(LeaderboardEntryDto))]
+[JsonSerializable(typeof(List<LeaderboardEntryDto>))]
 internal partial class GameJsonContext : JsonSerializerContext
 {
 }

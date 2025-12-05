@@ -28,6 +28,7 @@ public static class AdminEndpoints
         group.MapDelete("/games/{roomId}", DeleteGame);
 
         group.MapGet("/players", GetPlayers);
+        group.MapGet("/players/{userId}/history", GetPlayerHistory);
         group.MapPost("/players/{userId}/coins", UpdatePlayerCoins);
         group.MapDelete("/players/{userId}", DeletePlayer);
     }
@@ -247,6 +248,41 @@ public static class AdminEndpoints
                 new AdminPlayerDto(p.Id, p.UserId, p.User.UserName ?? "Unknown", p.User.Email ?? "No Email", p.Coins))
             .ToListAsync();
         return Results.Ok(players);
+    }
+
+    private static async Task<IResult> GetPlayerHistory(
+        string userId,
+        GameDbContext db,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        if (!InputValidator.IsValidUserId(userId))
+            return Results.BadRequest("Invalid user ID format");
+
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(1, page);
+
+        var query = db.WalletTransactions
+            .AsNoTracking()
+            .Where(t => t.UserId == userId);
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(t => t.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(t => new WalletTransactionDto(
+                t.Id,
+                t.Amount,
+                t.BalanceAfter,
+                t.TransactionType,
+                t.Description,
+                t.ReferenceId,
+                t.CreatedAt))
+            .ToListAsync();
+
+        return Results.Ok(new PagedResult<WalletTransactionDto>(items, totalCount, page, pageSize));
     }
 
     private static async Task<IResult> UpdatePlayerCoins(

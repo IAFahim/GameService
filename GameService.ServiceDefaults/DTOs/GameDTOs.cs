@@ -51,3 +51,23 @@ public record WalletTransactionDto(
     string Description,
     string ReferenceId,
     DateTimeOffset CreatedAt);
+
+/// <summary>
+///     Request to update player profile (display name, avatar)
+/// </summary>
+public record UpdateProfileRequest(string? DisplayName, int? AvatarId);
+
+/// <summary>
+///     Request for quick matchmaking
+/// </summary>
+public record QuickMatchRequest(string GameType, int MaxPlayers = 4, long EntryFee = 0);
+
+/// <summary>
+///     Response for quick match endpoint
+/// </summary>
+public record QuickMatchResponse(string RoomId, string Action);
+
+/// <summary>
+///     Leaderboard entry DTO
+/// </summary>
+public record LeaderboardEntryDto(string Username, long Coins);

@@ -956,12 +956,108 @@ Content-Type: {{contentType}}
 
 ###
 # ==========================================
-# 10. CLEANUP
+# 10. QUALITY OF LIFE & CONSUMER FEATURES
+# ==========================================
+
+###
+# @name UpdateProfile
+# 10.1 Update Display Name (Personalization)
+PATCH {{host}}/game/me
+Authorization: Bearer {{user_token}}
+Content-Type: {{contentType}}
+
+{
+  "displayName": "ProGamer_9000",
+  "avatarId": 5
+}
+
+> {%
+    client.test("Profile Updated", function () {
+        client.assert(response.status === 200, "Should return 200 OK");
+    });
+%}
+
+###
+# @name VerifyProfileUpdate
+# 10.2 Verify the name change persisted
+GET {{host}}/game/me
+Authorization: Bearer {{user_token}}
+
+> {%
+    client.test("Display Name Changed", function () {
+        client.assert(response.status === 200, "Should get profile");
+    });
+%}
+
+###
+# @name QuickMatch_Ludo
+# 10.3 Quick Match (Matchmaking) - Should create new if none exist
+POST {{host}}/games/quick-match
+Authorization: Bearer {{user_token}}
+Content-Type: {{contentType}}
+
+{
+  "gameType": "Ludo",
+  "maxPlayers": 2,
+  "entryFee": 0
+}
+
+> {%
+    client.test("Quick Match Found/Created", function () {
+        client.assert(response.status === 200, "Should return room info");
+        client.assert(response.body.roomId !== undefined, "Should have RoomId");
+        client.assert(response.body.action === "Created" || response.body.action === "Join", "Should indicate action");
+    });
+    client.global.set("quick_match_room", response.body.roomId);
+%}
+
+###
+# @name QuickMatch_JoinExisting
+# 10.4 Quick Match (Matchmaking) - User 2 should join the room User 1 just created
+POST {{host}}/games/quick-match
+Authorization: Bearer {{user2_token}}
+Content-Type: {{contentType}}
+
+{
+  "gameType": "Ludo",
+  "maxPlayers": 2,
+  "entryFee": 0
+}
+
+> {%
+    client.test("Quick Match Joined Existing", function () {
+        client.assert(response.status === 200, "Should return room info");
+        client.log("Match Action: " + response.body.action);
+    });
+%}
+
+###
+# @name GetLeaderboard
+# 10.5 Get Global Leaderboard
+GET {{host}}/game/leaderboard?limit=5
+Authorization: Bearer {{user_token}}
+
+> {%
+    client.test("Leaderboard Returned", function () {
+        client.assert(response.status === 200, "Should return leaderboard");
+        client.assert(Array.isArray(response.body), "Should be an array");
+    });
+%}
+
+###
+# @name DeleteQuickMatchRoom
+# 10.6 Cleanup quick match room
+DELETE {{host}}/admin/games/{{quick_match_room}}
+Authorization: Bearer {{admin_token}}
+
+###
+# ==========================================
+# 11. CLEANUP
 # ==========================================
 
 ###
 # @name DeleteUser_Test
-# 10.1 Soft delete the test user (preserves history)
+# 11.1 Soft delete the test user (preserves history)
 DELETE {{host}}/admin/players/{{user_id}}
 Authorization: Bearer {{admin_token}}
 
@@ -973,13 +1069,13 @@ Authorization: Bearer {{admin_token}}
 
 ###
 # @name DeleteUser2_Test
-# 10.2 Delete second test user
+# 11.2 Delete second test user
 DELETE {{host}}/admin/players/{{user2_id}}
 Authorization: Bearer {{admin_token}}
 
 ###
 # @name DeleteLudoGame
-# 10.3 Delete Ludo game
+# 11.3 Delete Ludo game
 DELETE {{host}}/admin/games/{{ludo_room_id}}
 Authorization: Bearer {{admin_token}}
 
@@ -991,31 +1087,31 @@ Authorization: Bearer {{admin_token}}
 
 ###
 # @name DeleteLudoTemplateGame
-# 10.4 Delete Ludo game created from template
+# 11.4 Delete Ludo game created from template
 DELETE {{host}}/admin/games/{{ludo_template_room_id}}
 Authorization: Bearer {{admin_token}}
 
 ###
 # @name DeleteMineGame
-# 10.5 Delete LuckyMine game
+# 11.5 Delete LuckyMine game
 DELETE {{host}}/admin/games/{{mine_room_id}}
 Authorization: Bearer {{admin_token}}
 
 ###
 # @name DeleteLuckyMineTemplateGame
-# 10.6 Delete LuckyMine game created from template
+# 11.6 Delete LuckyMine game created from template
 DELETE {{host}}/admin/games/{{luckymine_template_room_id}}
 Authorization: Bearer {{admin_token}}
 
 ###
 # @name DeleteHighRiskMineGame
-# 10.7 Delete high-risk LuckyMine game
+# 11.7 Delete high-risk LuckyMine game
 DELETE {{host}}/admin/games/{{high_risk_mine_room_id}}
 Authorization: Bearer {{admin_token}}
 
 ###
 # @name DeleteLudoTemplate
-# 10.8 Delete custom Ludo template
+# 11.8 Delete custom Ludo template
 DELETE {{host}}/admin/templates/{{ludo_template_id}}
 Authorization: Bearer {{admin_token}}
 
@@ -1027,13 +1123,13 @@ Authorization: Bearer {{admin_token}}
 
 ###
 # @name DeleteLuckyMineTemplate
-# 10.9 Delete custom LuckyMine template
+# 11.9 Delete custom LuckyMine template
 DELETE {{host}}/admin/templates/{{luckymine_template_id}}
 Authorization: Bearer {{admin_token}}
 
 ###
 # @name VerifyCleanup
-# 10.10 Verify games were cleaned up
+# 11.10 Verify games were cleaned up
 GET {{host}}/admin/games
 Authorization: Bearer {{admin_token}}
 
@@ -1051,13 +1147,18 @@ Authorization: Bearer {{admin_token}}
 # Total Endpoints Tested:
 # - Health Checks: /health, /alive, /ready
 # - Auth: /auth/login, /auth/register
-# - Player: /game/me, /game/coins/transaction, /game/coins/history
-# - Catalog: /games/supported
+# - Player: /game/me, PATCH /game/me, /game/coins/transaction, /game/coins/history, /game/leaderboard
+# - Catalog: /games/supported, /games/quick-match
 # - Admin Templates: GET/POST/DELETE /admin/templates
 # - Admin Games: GET/POST/DELETE /admin/games, /admin/games/create-from-template
 # - Admin Ludo: /admin/ludo/{roomId}/roll, /admin/ludo/{roomId}/move/{token}
 # - Admin LuckyMine: /admin/luckymine/{roomId}/full-state
 # - Admin Players: GET/POST/DELETE /admin/players
+#
+# Quality of Life Endpoints:
+# - PATCH /game/me: Update display name/avatar
+# - POST /games/quick-match: Matchmaking for "Play Now" button
+# - GET /game/leaderboard: Global leaderboard
 #
 # Security Tests:
 # - Unauthorized access

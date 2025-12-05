@@ -79,6 +79,12 @@ else
                                     <i class="bi bi-cash-coin fs-5"></i>
                                 </button>
 
+                                <button class="btn btn-sm btn-outline-info border-0"
+                                        title="View History"
+                                        @onclick="() => ViewHistory(user)">
+                                    <i class="bi bi-clock-history fs-5"></i>
+                                </button>
+
                                 <div class="vr my-2 mx-1 text-secondary opacity-25"></div>
 
                                 <button class="btn btn-sm btn-outline-danger border-0"
@@ -151,6 +157,59 @@ else
     </div>
 }
 
+<!-- Transaction History Modal -->
+@if (historyUser != null)
+{
+    <div class="modal fade show d-block backdrop-blur" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header">
+                    <h5 class="modal-title">Transaction History: @historyUser.Username</h5>
+                    <button type="button" class="btn-close" @onclick="() => historyUser = null"></button>
+                </div>
+                <div class="modal-body p-0">
+                    @if (historyItems == null)
+                    {
+                        <div class="p-4 text-center"><div class="spinner-border text-primary"></div></div>
+                    }
+                    else if (!historyItems.Any())
+                    {
+                        <div class="p-4 text-center text-muted">No transactions found.</div>
+                    }
+                    else
+                    {
+                        <table class="table table-striped mb-0 small">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Type</th>
+                                    <th>Desc</th>
+                                    <th class="text-end">Amount</th>
+                                    <th class="text-end">Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach(var tx in historyItems)
+                                {
+                                    <tr>
+                                        <td>@tx.CreatedAt.ToLocalTime().ToString("g")</td>
+                                        <td>@tx.TransactionType</td>
+                                        <td class="text-truncate" style="max-width: 150px;" title="@tx.Description">@tx.Description</td>
+                                        <td class="text-end fw-bold @(tx.Amount > 0 ? "text-success" : "text-danger")">
+                                            @tx.Amount.ToString("+0;-#")
+                                        </td>
+                                        <td class="text-end text-muted">@tx.BalanceAfter.ToString("N0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <style>
     .backdrop-blur {
         background-color: rgba(0, 0, 0, 0.5);
@@ -169,6 +228,8 @@ else
 
     private AdminPlayerDto? editingUser;
     private AdminPlayerDto? deletingUser;
+    private AdminPlayerDto? historyUser;
+    private List<WalletTransactionDto>? historyItems;
     private long coinAmount;
     private bool _isDisposed;
 
@@ -290,6 +351,16 @@ else
     private async Task LoadUsers()
     {
         users = await AdminService.GetPlayersAsync();
+    }
+
+    private async Task ViewHistory(AdminPlayerDto user)
+    {
+        historyUser = user;
+        historyItems = null;
+        StateHasChanged();
+        var result = await AdminService.GetPlayerHistoryAsync(user.UserId, 1);
+        historyItems = result?.Items.ToList() ?? new();
+        StateHasChanged();
     }
 
     public void Dispose()

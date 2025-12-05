@@ -117,4 +117,17 @@ public class GameAdminService(HttpClient http)
         var content = await response.Content.ReadFromJsonAsync<JsonElement>();
         return content.TryGetProperty("roomId", out var p) ? p.GetString() : null;
     }
+
+    public async Task<PagedResult<WalletTransactionDto>?> GetPlayerHistoryAsync(string userId, int page = 1, int pageSize = 20)
+    {
+        try
+        {
+            return await http.GetFromJsonAsync<PagedResult<WalletTransactionDto>>(
+                $"/admin/players/{userId}/history?page={page}&pageSize={pageSize}");
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }

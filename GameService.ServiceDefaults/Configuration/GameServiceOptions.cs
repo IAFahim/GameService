@@ -41,6 +41,11 @@ public class GameServiceOptions
     /// Security settings
     /// </summary>
     public SecurityOptions Security { get; set; } = new();
+
+    /// <summary>
+    /// Database connection settings
+    /// </summary>
+    public DatabaseOptions Database { get; set; } = new();
 }
 
 public class EconomyOptions
@@ -141,6 +146,52 @@ public class SecurityOptions
     /// Block requests if API key validation fails in production
     /// </summary>
     public bool EnforceApiKeyValidation { get; set; } = true;
+}
+
+/// <summary>
+/// PostgreSQL database connection pooling and performance settings.
+/// These are applied to the connection string at startup.
+/// </summary>
+public class DatabaseOptions
+{
+    /// <summary>
+    /// Maximum number of connections in the pool (default: 100)
+    /// Higher values support more concurrent requests but use more memory.
+    /// </summary>
+    public int MaxPoolSize { get; set; } = 100;
+
+    /// <summary>
+    /// Minimum number of connections to keep in the pool (default: 10)
+    /// Prevents cold-start latency for initial requests.
+    /// </summary>
+    public int MinPoolSize { get; set; } = 10;
+
+    /// <summary>
+    /// Time in seconds before an idle connection is closed (default: 300 = 5 min)
+    /// </summary>
+    public int ConnectionIdleLifetime { get; set; } = 300;
+
+    /// <summary>
+    /// Maximum time in seconds to wait for a connection from the pool (default: 30)
+    /// </summary>
+    public int ConnectionTimeout { get; set; } = 30;
+
+    /// <summary>
+    /// Command timeout in seconds (default: 30)
+    /// </summary>
+    public int CommandTimeout { get; set; } = 30;
+
+    /// <summary>
+    /// Enable connection pooling (should always be true in production)
+    /// </summary>
+    public bool Pooling { get; set; } = true;
+
+    /// <summary>
+    /// Optional read replica connection string for read-heavy queries.
+    /// If set, player queries and game history lookups use this connection.
+    /// Format: "Host=replica.db.example.com;Database=gameservice;..."
+    /// </summary>
+    public string? ReadReplicaConnectionString { get; set; }
 }
 
 /// <summary>

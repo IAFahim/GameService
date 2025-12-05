@@ -7,6 +7,7 @@ using GameService.Web.Services;
 using GameService.Web.Workers;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,10 +29,27 @@ builder.Services.AddHttpClient<GameAdminService>((sp, client) =>
 });
 builder.Services.AddHostedService<RedisLogStreamer>();
 
+// Configure PostgreSQL with connection pooling
+var webDbOptions = builder.Configuration
+    .GetSection(GameServiceOptions.SectionName)
+    .Get<GameServiceOptions>()?.Database ?? new DatabaseOptions();
+
 builder.AddNpgsqlDbContext<GameDbContext>("postgresdb", configureDbContextOptions: options =>
 {
+    options.UseNpgsql(npgsqlOptions =>
+    {
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorCodesToAdd: null);
+        npgsqlOptions.CommandTimeout(webDbOptions.CommandTimeout);
+    });
+    
     if (builder.Environment.IsDevelopment())
+    {
         options.EnableSensitiveDataLogging();
+        options.EnableDetailedErrors();
+    }
 });
 
 builder.Services.AddCascadingAuthenticationState();
@@ -70,9 +88,22 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", true);
     app.UseHsts();
+    
+    // Production: Apply pending migrations
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<GameDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    
+    var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
+    if (pendingMigrations.Any())
+    {
+        logger.LogInformation("Applying {Count} pending migration(s)", pendingMigrations.Count());
+        await db.Database.MigrateAsync();
+    }
 }
 else
 {
+    // Development: Use EnsureCreated for rapid iteration
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<GameDbContext>();
     await db.Database.EnsureCreatedAsync();

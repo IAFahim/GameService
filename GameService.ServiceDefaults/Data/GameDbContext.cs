@@ -43,17 +43,45 @@ public class GameDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<WalletTransaction>(b =>
         {
+            // Single column indexes
             b.HasIndex(t => t.UserId);
             b.HasIndex(t => t.CreatedAt);
             b.HasIndex(t => t.IdempotencyKey).IsUnique().HasFilter("\"IdempotencyKey\" IS NOT NULL");
             b.HasIndex(t => t.ReferenceId);
+            
+            // Composite indexes for common query patterns
+            // Query: Get user's recent transactions (sorted by date)
+            b.HasIndex(t => new { t.UserId, t.CreatedAt })
+                .HasDatabaseName("IX_WalletTransactions_UserId_CreatedAt");
+            
+            // Query: Find transactions by reference and user
+            b.HasIndex(t => new { t.UserId, t.ReferenceId })
+                .HasDatabaseName("IX_WalletTransactions_UserId_ReferenceId");
+            
+            // Query: Transaction type filtering for user
+            b.HasIndex(t => new { t.UserId, t.TransactionType, t.CreatedAt })
+                .HasDatabaseName("IX_WalletTransactions_UserId_Type_CreatedAt");
         });
 
         builder.Entity<ArchivedGame>(b =>
         {
+            // Single column indexes
             b.HasIndex(g => g.RoomId);
             b.HasIndex(g => g.GameType);
             b.HasIndex(g => g.EndedAt);
+            
+            // Composite indexes for common query patterns
+            // Query: Get games by type sorted by end time (leaderboards, history)
+            b.HasIndex(g => new { g.GameType, g.EndedAt })
+                .HasDatabaseName("IX_ArchivedGames_GameType_EndedAt");
+            
+            // Query: Find player's game history
+            b.HasIndex(g => new { g.WinnerUserId, g.EndedAt })
+                .HasDatabaseName("IX_ArchivedGames_WinnerUserId_EndedAt");
+            
+            // Query: Game type analytics with pot amounts
+            b.HasIndex(g => new { g.GameType, g.TotalPot })
+                .HasDatabaseName("IX_ArchivedGames_GameType_TotalPot");
         });
 
         builder.Entity<GameRoomTemplate>().HasData(

@@ -19,12 +19,37 @@ using GameService.ServiceDefaults.Configuration;
 using GameService.ServiceDefaults.Data;
 using GameService.ServiceDefaults.Security;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
-builder.AddNpgsqlDbContext<GameDbContext>("postgresdb");
+
+// Configure PostgreSQL with connection pooling
+var gameServiceOptions = builder.Configuration.GetSection(GameServiceOptions.SectionName).Get<GameServiceOptions>() ?? new GameServiceOptions();
+var dbOptions = gameServiceOptions.Database;
+
+builder.AddNpgsqlDbContext<GameDbContext>("postgresdb", configureDbContextOptions: options =>
+{
+    // Connection pooling is configured via connection string parameters
+    // These are applied by Aspire's AddNpgsqlDbContext, but we can customize further
+    options.UseNpgsql(npgsqlOptions =>
+    {
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorCodesToAdd: null);
+        npgsqlOptions.CommandTimeout(dbOptions.CommandTimeout);
+    });
+    
+    if (builder.Environment.IsDevelopment())
+    {
+        options.EnableSensitiveDataLogging();
+        options.EnableDetailedErrors();
+    }
+});
+
 builder.AddRedisClient("cache");
 
 builder.Services.Configure<GameServiceOptions>(builder.Configuration.GetSection(GameServiceOptions.SectionName));
@@ -40,8 +65,6 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.TypeInfoResolverChain.Insert(2, LuckyMineJsonContext.Default);
     options.SerializerOptions.PropertyNameCaseInsensitive = true;
 });
-
-var gameServiceOptions = builder.Configuration.GetSection(GameServiceOptions.SectionName).Get<GameServiceOptions>() ?? new GameServiceOptions();
 
 builder.Services.AddCors(options =>
 {

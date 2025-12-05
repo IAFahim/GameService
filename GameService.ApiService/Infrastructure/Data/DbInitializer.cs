@@ -1,12 +1,21 @@
 using GameService.ServiceDefaults.Configuration;
 using GameService.ServiceDefaults.Data;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace GameService.ApiService.Infrastructure.Data;
 
 public static class DbInitializer
 {
+    /// <summary>
+    /// Initialize database with migrations and seed data.
+    /// In Development: Uses EnsureCreated for rapid iteration (no migration files needed).
+    /// In Production: Uses Migrate() to apply pending migrations safely.
+    /// 
+    /// IMPORTANT: Before deploying to production, generate migrations:
+    ///   dotnet ef migrations add InitialCreate -p GameService.ServiceDefaults -s GameService.ApiService
+    /// </summary>
     public static async Task InitializeAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();
@@ -17,7 +26,35 @@ public static class DbInitializer
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<GameDbContext>>();
         var env = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
 
-        await db.Database.EnsureCreatedAsync();
+        // Database initialization strategy:
+        // - Development/Testing: Use EnsureCreated for quick iteration without migration files
+        // - Production: Use Migrate() to apply pending migrations safely
+        if (env.IsDevelopment() || env.IsEnvironment("Testing"))
+        {
+            // Fast path for development - creates schema from model without migrations
+            // WARNING: This does not support schema updates. Delete DB or use migrations for changes.
+            await db.Database.EnsureCreatedAsync();
+            logger.LogInformation("Database schema ensured (Development mode - using EnsureCreated)");
+        }
+        else
+        {
+            // Production: Apply any pending migrations
+            var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
+            if (pendingMigrations.Any())
+            {
+                logger.LogInformation("Applying {Count} pending migration(s): {Migrations}", 
+                    pendingMigrations.Count(), 
+                    string.Join(", ", pendingMigrations));
+                    
+                await db.Database.MigrateAsync();
+                
+                logger.LogInformation("Database migrations applied successfully");
+            }
+            else
+            {
+                logger.LogInformation("Database is up to date - no pending migrations");
+            }
+        }
 
         if (!await roleManager.RoleExistsAsync("Admin")) 
             await roleManager.CreateAsync(new IdentityRole("Admin"));

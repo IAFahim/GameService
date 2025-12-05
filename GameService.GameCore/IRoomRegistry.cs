@@ -61,4 +61,39 @@ public interface IRoomRegistry
     ///     Remove user→room mapping when user leaves
     /// </summary>
     Task RemoveUserRoomAsync(string userId);
+
+    /// <summary>
+    ///     Track disconnected player with TTL for reconnection grace period
+    /// </summary>
+    Task SetDisconnectedPlayerAsync(string userId, string roomId, TimeSpan gracePeriod);
+
+    /// <summary>
+    ///     Get and remove disconnected player info (atomic operation)
+    /// </summary>
+    Task<string?> TryGetAndRemoveDisconnectedPlayerAsync(string userId);
+
+    /// <summary>
+    ///     Check rate limit for user actions (returns true if allowed)
+    /// </summary>
+    Task<bool> CheckRateLimitAsync(string userId, int maxPerMinute);
+
+    /// <summary>
+    ///     Track user connection count (returns new count)
+    /// </summary>
+    Task<int> IncrementConnectionCountAsync(string userId);
+
+    /// <summary>
+    ///     Decrement user connection count
+    /// </summary>
+    Task DecrementConnectionCountAsync(string userId);
+
+    /// <summary>
+    ///     Get rooms that need timeout checks (using sorted set with timestamps)
+    /// </summary>
+    Task<IReadOnlyList<string>> GetRoomsNeedingTimeoutCheckAsync(string gameType, int maxRooms);
+
+    /// <summary>
+    ///     Update room's last activity timestamp
+    /// </summary>
+    Task UpdateRoomActivityAsync(string roomId, string gameType);
 }

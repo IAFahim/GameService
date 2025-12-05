@@ -7,6 +7,9 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis) : IRoomRegis
 {
     private const string GlobalRegistryKey = "global:room_registry";
     private const string UserRoomKey = "global:user_rooms";
+    private const string DisconnectedPlayersKey = "global:disconnected_players";
+    private const string UserConnectionCountKey = "global:user_connections";
+    private const string RateLimitKeyPrefix = "ratelimit:";
     private readonly IDatabase _db = redis.GetDatabase();
 
     public async Task<string?> GetGameTypeAsync(string roomId)
@@ -21,8 +24,8 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis) : IRoomRegis
         var score = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
         _ = batch.HashSetAsync(GlobalRegistryKey, roomId, gameType);
-
         _ = batch.SortedSetAddAsync(GameTypeIndexKey(gameType), roomId, score);
+        _ = batch.SortedSetAddAsync(ActivityIndexKey(gameType), roomId, score);
 
         batch.Execute();
         await Task.CompletedTask;
@@ -36,6 +39,7 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis) : IRoomRegis
         var batch = _db.CreateBatch();
         _ = batch.HashDeleteAsync(GlobalRegistryKey, roomId);
         _ = batch.SortedSetRemoveAsync(GameTypeIndexKey(gameType), roomId);
+        _ = batch.SortedSetRemoveAsync(ActivityIndexKey(gameType), roomId);
         batch.Execute();
     }
 
@@ -92,13 +96,68 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis) : IRoomRegis
         await _db.HashDeleteAsync(UserRoomKey, userId);
     }
 
-    private static string GameTypeIndexKey(string gameType)
+    public async Task SetDisconnectedPlayerAsync(string userId, string roomId, TimeSpan gracePeriod)
     {
-        return $"index:rooms:{gameType}";
+        // Store with TTL for automatic cleanup
+        var key = $"{DisconnectedPlayersKey}:{userId}";
+        await _db.StringSetAsync(key, roomId, gracePeriod);
     }
 
-    private static string LockKey(string roomId)
+    public async Task<string?> TryGetAndRemoveDisconnectedPlayerAsync(string userId)
     {
-        return $"lock:room:{roomId}";
+        var key = $"{DisconnectedPlayersKey}:{userId}";
+        var roomId = await _db.StringGetDeleteAsync(key);
+        return roomId.IsNullOrEmpty ? null : roomId.ToString();
     }
+
+    public async Task<bool> CheckRateLimitAsync(string userId, int maxPerMinute)
+    {
+        var key = $"{RateLimitKeyPrefix}{userId}";
+        var count = await _db.StringIncrementAsync(key);
+        
+        if (count == 1)
+        {
+            // Set expiry on first request in window
+            await _db.KeyExpireAsync(key, TimeSpan.FromMinutes(1));
+        }
+        
+        return count <= maxPerMinute;
+    }
+
+    public async Task<int> IncrementConnectionCountAsync(string userId)
+    {
+        var count = await _db.HashIncrementAsync(UserConnectionCountKey, userId);
+        return (int)count;
+    }
+
+    public async Task DecrementConnectionCountAsync(string userId)
+    {
+        var count = await _db.HashDecrementAsync(UserConnectionCountKey, userId);
+        if (count <= 0)
+        {
+            await _db.HashDeleteAsync(UserConnectionCountKey, userId);
+        }
+    }
+
+    public async Task<IReadOnlyList<string>> GetRoomsNeedingTimeoutCheckAsync(string gameType, int maxRooms)
+    {
+        // Get rooms sorted by oldest activity first (most likely to have timeouts)
+        var members = await _db.SortedSetRangeByRankAsync(
+            ActivityIndexKey(gameType), 
+            0, 
+            maxRooms - 1, 
+            Order.Ascending);
+        
+        return members.Select(m => m.ToString()).ToList();
+    }
+
+    public async Task UpdateRoomActivityAsync(string roomId, string gameType)
+    {
+        var score = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        await _db.SortedSetAddAsync(ActivityIndexKey(gameType), roomId, score);
+    }
+
+    private static string GameTypeIndexKey(string gameType) => $"index:rooms:{gameType}";
+    private static string ActivityIndexKey(string gameType) => $"index:activity:{gameType}";
+    private static string LockKey(string roomId) => $"lock:room:{roomId}";
 }

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Security.Claims;
 using System.Text.Json;
 using GameService.ApiService.Features.Economy;
@@ -16,6 +15,7 @@ namespace GameService.ApiService.Hubs;
 ///     Unified game hub - handles ALL game types through a single SignalR endpoint.
 ///     Clients connect once and can interact with any game type.
 ///     Includes chat functionality and reconnection grace period handling.
+///     All state is stored in Redis for horizontal scaling.
 /// </summary>
 [Authorize]
 public class GameHub(
@@ -26,42 +26,16 @@ public class GameHub(
 {
     private readonly int _reconnectionGracePeriodSeconds = options.Value.Session.ReconnectionGracePeriodSeconds;
     private readonly int _maxMessagesPerMinute = options.Value.RateLimit.SignalRMessagesPerMinute;
-
-    /// <summary>
-    ///     Tracks recently disconnected players for reconnection grace period
-    ///     Key: UserId, Value: (RoomId, DisconnectTime)
-    /// </summary>
-    private static readonly ConcurrentDictionary<string, (string RoomId, DateTimeOffset DisconnectTime)>
-        DisconnectedPlayers = new();
-
-    /// <summary>
-    ///     Rate limiting: tracks message counts per user per minute
-    ///     Key: UserId, Value: (Count, WindowStart)
-    /// </summary>
-    private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)>
-        UserMessageCounts = new();
+    private readonly int _maxConnectionsPerUser = options.Value.Session.MaxConnectionsPerUser;
 
     private string UserId => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
     private string UserName => Context.User?.Identity?.Name ?? "Unknown";
 
-    private bool CheckRateLimit()
+    private async Task<bool> CheckRateLimitAsync()
     {
-        var now = DateTimeOffset.UtcNow;
-        var windowStart = now.AddMinutes(-1);
-
-        var current = UserMessageCounts.AddOrUpdate(
-            UserId,
-            _ => (1, now),
-            (_, existing) =>
-            {
-                if (existing.WindowStart < windowStart)
-                    return (1, now); // Reset window
-                return (existing.Count + 1, existing.WindowStart);
-            });
-
-        if (current.Count > _maxMessagesPerMinute)
+        if (!await roomRegistry.CheckRateLimitAsync(UserId, _maxMessagesPerMinute))
         {
-            logger.LogWarning("Rate limit exceeded for user {UserId}: {Count} messages in window", UserId, current.Count);
+            logger.LogWarning("Rate limit exceeded for user {UserId}", UserId);
             return false;
         }
         return true;
@@ -69,27 +43,38 @@ public class GameHub(
 
     public override async Task OnConnectedAsync()
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, "Lobby");
-
-        if (DisconnectedPlayers.TryRemove(UserId, out var disconnectInfo))
+        // Check connection limit per user
+        var connectionCount = await roomRegistry.IncrementConnectionCountAsync(UserId);
+        if (connectionCount > _maxConnectionsPerUser)
         {
-            var elapsed = DateTimeOffset.UtcNow - disconnectInfo.DisconnectTime;
-            if (elapsed.TotalSeconds < _reconnectionGracePeriodSeconds)
-            {
-                await Groups.AddToGroupAsync(Context.ConnectionId, disconnectInfo.RoomId);
-                await Clients.Group(disconnectInfo.RoomId)
-                    .SendAsync("PlayerReconnected", new PlayerReconnectedEvent(UserId, UserName));
-                logger.LogInformation("Player {UserId} reconnected to room {RoomId} within grace period", UserId,
-                    disconnectInfo.RoomId);
-            }
+            await roomRegistry.DecrementConnectionCountAsync(UserId);
+            logger.LogWarning("Connection limit exceeded for user {UserId}: {Count}/{Max}", 
+                UserId, connectionCount, _maxConnectionsPerUser);
+            Context.Abort();
+            return;
         }
 
-        logger.LogInformation("Player {UserId} connected to GameHub", UserId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, "Lobby");
+
+        // Check if player was disconnected and is reconnecting within grace period
+        var disconnectedRoomId = await roomRegistry.TryGetAndRemoveDisconnectedPlayerAsync(UserId);
+        if (disconnectedRoomId != null)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, disconnectedRoomId);
+            await Clients.Group(disconnectedRoomId)
+                .SendAsync("PlayerReconnected", new PlayerReconnectedEvent(UserId, UserName));
+            logger.LogInformation("Player {UserId} reconnected to room {RoomId} within grace period", 
+                UserId, disconnectedRoomId);
+        }
+
+        logger.LogDebug("Player {UserId} connected to GameHub (connection {Count})", UserId, connectionCount);
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        await roomRegistry.DecrementConnectionCountAsync(UserId);
+
         // O(1) lookup instead of iterating all rooms
         var roomId = await roomRegistry.GetUserRoomAsync(UserId);
         
@@ -98,22 +83,32 @@ public class GameHub(
             var gameType = await roomRegistry.GetGameTypeAsync(roomId);
             if (gameType != null)
             {
-                DisconnectedPlayers[UserId] = (roomId, DateTimeOffset.UtcNow);
+                // Store in Redis with TTL for automatic cleanup
+                await roomRegistry.SetDisconnectedPlayerAsync(
+                    UserId, 
+                    roomId, 
+                    TimeSpan.FromSeconds(_reconnectionGracePeriodSeconds + 1));
 
                 await Clients.Group(roomId).SendAsync("PlayerDisconnected",
                     new PlayerDisconnectedEvent(UserId, UserName, _reconnectionGracePeriodSeconds));
 
+                // Schedule cleanup after grace period using fire-and-forget
+                // This works across instances because Redis TTL handles the state
                 var capturedUserId = UserId;
                 var capturedUserName = UserName;
                 var capturedRoomId = roomId;
                 var capturedGameType = gameType;
                 var gracePeriod = _reconnectionGracePeriodSeconds;
-                _ = Task.Delay(TimeSpan.FromSeconds(gracePeriod + 1)).ContinueWith(async _ =>
+                
+                _ = Task.Delay(TimeSpan.FromSeconds(gracePeriod + 2)).ContinueWith(async _ =>
                 {
-                    if (DisconnectedPlayers.TryRemove(capturedUserId, out var info) && info.RoomId == capturedRoomId)
+                    // Check if player is still disconnected (Redis key still exists = reconnected)
+                    var stillDisconnected = await roomRegistry.TryGetAndRemoveDisconnectedPlayerAsync(capturedUserId);
+                    if (stillDisconnected == capturedRoomId)
                     {
                         var roomService = serviceProvider.GetKeyedService<IGameRoomService>(capturedGameType);
-                        if (roomService != null) await roomService.LeaveRoomAsync(capturedRoomId, capturedUserId);
+                        if (roomService != null) 
+                            await roomService.LeaveRoomAsync(capturedRoomId, capturedUserId);
 
                         await roomRegistry.RemoveUserRoomAsync(capturedUserId);
 
@@ -128,7 +123,7 @@ public class GameHub(
             }
         }
 
-        logger.LogInformation("Player {UserId} disconnected from GameHub", UserId);
+        logger.LogDebug("Player {UserId} disconnected from GameHub", UserId);
         await base.OnDisconnectedAsync(exception);
     }
 
@@ -310,8 +305,8 @@ public class GameHub(
     /// </summary>
     public async Task<GameActionResult> PerformAction(string roomId, string actionName, JsonElement payload)
     {
-        // Rate limit check
-        if (!CheckRateLimit())
+        // Rate limit check using Redis
+        if (!await CheckRateLimitAsync())
             return GameActionResult.Error("Rate limit exceeded. Please slow down.");
 
         var gameType = await roomRegistry.GetGameTypeAsync(roomId);
@@ -336,6 +331,10 @@ public class GameHub(
             if (!result.Success)
                 await Clients.Caller.SendAsync("ActionError",
                     new ActionErrorEvent(actionName, result.ErrorMessage ?? "Unknown error"));
+
+            // Update room activity for timeout tracking
+            if (result.Success)
+                await roomRegistry.UpdateRoomActivityAsync(roomId, gameType);
 
             return result;
         }

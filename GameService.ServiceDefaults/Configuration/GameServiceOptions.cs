@@ -62,6 +62,11 @@ public class SessionOptions
     /// Grace period in seconds for player reconnection before being removed from game
     /// </summary>
     public int ReconnectionGracePeriodSeconds { get; set; } = 15;
+
+    /// <summary>
+    /// Maximum concurrent SignalR connections per user (prevents connection flooding)
+    /// </summary>
+    public int MaxConnectionsPerUser { get; set; } = 3;
 }
 
 public class AdminSeedOptions
@@ -85,9 +90,9 @@ public class AdminSeedOptions
 public class RateLimitOptions
 {
     /// <summary>
-    /// Maximum number of requests per window
+    /// Maximum number of requests per window (1000/min recommended for games)
     /// </summary>
-    public int PermitLimit { get; set; } = 100;
+    public int PermitLimit { get; set; } = 1000;
 
     /// <summary>
     /// Rate limit window in minutes
@@ -97,7 +102,7 @@ public class RateLimitOptions
     /// <summary>
     /// Maximum SignalR messages per minute per user
     /// </summary>
-    public int SignalRMessagesPerMinute { get; set; } = 60;
+    public int SignalRMessagesPerMinute { get; set; } = 120;
 }
 
 public class CorsOptions

@@ -6,7 +6,8 @@ namespace GameService.ApiService.Infrastructure.Workers;
 
 /// <summary>
 ///     Background worker that checks for turn timeouts across all active games.
-///     Runs every few seconds and triggers auto-play/forfeit for AFK players.
+///     Uses Redis Sorted Sets with activity timestamps for efficient timeout detection.
+///     Only processes rooms that haven't had recent activity.
 /// </summary>
 public sealed class GameLoopWorker(
     IServiceProvider serviceProvider,
@@ -16,6 +17,7 @@ public sealed class GameLoopWorker(
     ILogger<GameLoopWorker> logger) : BackgroundService
 {
     private readonly int _tickIntervalMs = options.Value.GameLoop.TickIntervalMs;
+    private const int MaxRoomsPerTick = 50; // Process up to 50 rooms per tick to avoid blocking
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -25,7 +27,7 @@ public sealed class GameLoopWorker(
         {
             try
             {
-                await CheckAllRoomsForTimeouts(stoppingToken);
+                await CheckRoomsForTimeoutsOptimized(stoppingToken);
             }
             catch (Exception ex)
             {
@@ -36,7 +38,7 @@ public sealed class GameLoopWorker(
         }
     }
 
-    private async Task CheckAllRoomsForTimeouts(CancellationToken ct)
+    private async Task CheckRoomsForTimeoutsOptimized(CancellationToken ct)
     {
         var modules = serviceProvider.GetServices<IGameModule>();
 
@@ -49,7 +51,12 @@ public sealed class GameLoopWorker(
 
             try
             {
-                var (roomIds, _) = await roomRegistry.GetRoomIdsPagedAsync(module.GameName, 0, 100);
+                // Get rooms sorted by oldest activity (most likely to have timeouts)
+                var roomIds = await roomRegistry.GetRoomsNeedingTimeoutCheckAsync(
+                    module.GameName, 
+                    MaxRoomsPerTick);
+
+                if (roomIds.Count == 0) continue;
 
                 foreach (var roomId in roomIds)
                 {
@@ -57,7 +64,8 @@ public sealed class GameLoopWorker(
 
                     try
                     {
-                        if (!await roomRegistry.TryAcquireLockAsync(roomId, TimeSpan.FromSeconds(1))) continue;
+                        if (!await roomRegistry.TryAcquireLockAsync(roomId, TimeSpan.FromSeconds(1))) 
+                            continue;
 
                         try
                         {
@@ -69,6 +77,9 @@ public sealed class GameLoopWorker(
                                     roomId, result.Events.Count);
 
                                 await broadcaster.BroadcastResultAsync(roomId, result);
+                                
+                                // Update activity timestamp after processing
+                                await roomRegistry.UpdateRoomActivityAsync(roomId, module.GameName);
                             }
                         }
                         finally

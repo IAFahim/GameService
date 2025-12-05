@@ -17,7 +17,7 @@
 # ==========================================
 
 @adminEmail = admin@gameservice.local
-@adminPassword = DevAdmin!2024#Secure
+@adminPassword = Admin@2024#GameService!
 @adminApiKey = Dev-Only-Key-ChangeInProd-abc123xyz789!@#$
 
 # Dynamic User Credentials (for testing only)

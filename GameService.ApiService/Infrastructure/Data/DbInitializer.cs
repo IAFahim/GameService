@@ -22,29 +22,23 @@ public static class DbInitializer
         if (!await roleManager.RoleExistsAsync("Admin")) 
             await roleManager.CreateAsync(new IdentityRole("Admin"));
 
+        // Load credentials from appsettings.Development.json or Environment Variables
         var adminEmail = options.AdminSeed.Email;
         var adminPassword = options.AdminSeed.Password;
 
-        // In production, credentials MUST come from environment variables/secrets
-        if (!env.IsDevelopment())
+        if (string.IsNullOrEmpty(adminEmail) || string.IsNullOrEmpty(adminPassword))
         {
-            if (string.IsNullOrEmpty(adminEmail) || string.IsNullOrEmpty(adminPassword))
+            if (env.IsDevelopment())
+            {
+                logger.LogWarning("Admin seed skipped. Please check 'GameService:AdminSeed' in appsettings.Development.json");
+            }
+            else
             {
                 logger.LogInformation(
                     "Admin seed credentials not configured in production. " +
-                    "Create admin account manually or set environment variables: " +
-                    "GameService__AdminSeed__Email and GameService__AdminSeed__Password");
-                return;
+                    "Set environment variables: GameService__AdminSeed__Email and GameService__AdminSeed__Password");
             }
-        }
-        else
-        {
-            // Development only - use configured values or skip
-            if (string.IsNullOrEmpty(adminEmail) || string.IsNullOrEmpty(adminPassword))
-            {
-                logger.LogDebug("Admin seed skipped - no credentials configured in development");
-                return;
-            }
+            return;
         }
 
         if (await userManager.FindByEmailAsync(adminEmail) is null)
@@ -67,10 +61,12 @@ public static class DbInitializer
                 });
                 await db.SaveChangesAsync();
                 
-                // Don't log the email in production - security
+                // In Development, print the credentials to the console for convenience
                 if (env.IsDevelopment())
                 {
-                    logger.LogInformation("Admin account created: {Email}", adminEmail);
+                    logger.LogInformation("✅ Admin initialized from config.");
+                    logger.LogInformation("   Email: {Email}", adminEmail);
+                    logger.LogInformation("   Password: {Password}", adminPassword);
                 }
                 else
                 {

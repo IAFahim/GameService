@@ -105,7 +105,11 @@ public class CorsOptions
     /// <summary>
     /// Allowed origins for CORS (comma-separated in production)
     /// </summary>
-    public string[] AllowedOrigins { get; set; } = ["https://yourdomain.com"];
+    public string[] AllowedOrigins { get; set; } = [
+        "http://172.252.13.99",
+        "http://172.252.13.99:8080",
+        "http://localhost" 
+    ];
 }
 
 public class GameLoopOptions

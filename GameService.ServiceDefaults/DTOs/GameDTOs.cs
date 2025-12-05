@@ -2,7 +2,12 @@ namespace GameService.ServiceDefaults.DTOs;
 
 public record struct UpdateCoinRequest(long Amount, string? IdempotencyKey = null, string? ReferenceId = null);
 
-public record struct PlayerProfileResponse(string UserId, long Coins);
+public record struct PlayerProfileResponse(string UserId, long Coins, string? ActiveRoomId = null, string? ActiveGameType = null);
+
+/// <summary>
+///     Generic pagination wrapper for API responses
+/// </summary>
+public record PagedResult<T>(IEnumerable<T> Items, int TotalCount, int Page, int PageSize);
 
 public record AdminPlayerDto(int ProfileId, string UserId, string Username, string Email, long Coins);
 

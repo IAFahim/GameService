@@ -65,9 +65,14 @@ public static class EconomyEndpoints
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
 
-        var transactions = await db.WalletTransactions
+        var query = db.WalletTransactions
             .AsNoTracking()
-            .Where(t => t.UserId == userId)
+            .Where(t => t.UserId == userId);
+
+        // QoL: Return pagination metadata for infinite scroll
+        var totalCount = await query.CountAsync();
+
+        var items = await query
             .OrderByDescending(t => t.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -81,6 +86,6 @@ public static class EconomyEndpoints
                 t.CreatedAt))
             .ToListAsync();
 
-        return Results.Ok(transactions);
+        return Results.Ok(new PagedResult<WalletTransactionDto>(items, totalCount, page, pageSize));
     }
 }

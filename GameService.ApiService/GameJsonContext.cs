@@ -49,6 +49,7 @@ namespace GameService.ApiService;
 [JsonSerializable(typeof(Dictionary<string, DateTimeOffset>))]
 [JsonSerializable(typeof(WalletTransactionDto))]
 [JsonSerializable(typeof(List<WalletTransactionDto>))]
+[JsonSerializable(typeof(PagedResult<WalletTransactionDto>))]
 internal partial class GameJsonContext : JsonSerializerContext
 {
 }

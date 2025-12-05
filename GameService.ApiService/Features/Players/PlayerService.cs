@@ -1,3 +1,4 @@
+using GameService.GameCore;
 using GameService.ServiceDefaults.Data;
 using GameService.ServiceDefaults.DTOs;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +10,7 @@ public interface IPlayerService
     Task<PlayerProfileResponse?> GetProfileAsync(string userId);
 }
 
-public class PlayerService(GameDbContext db) : IPlayerService
+public class PlayerService(GameDbContext db, IRoomRegistry roomRegistry) : IPlayerService
 {
     public async Task<PlayerProfileResponse?> GetProfileAsync(string userId)
     {
@@ -17,8 +18,23 @@ public class PlayerService(GameDbContext db) : IPlayerService
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
-        return profile is not null
-            ? new PlayerProfileResponse(profile.UserId, profile.Coins)
-            : null;
+        if (profile is null) return null;
+
+        // QoL: Check Redis for active session immediately
+        // This allows the UI to show a "Rejoin Game" button instantly
+        var activeRoomId = await roomRegistry.GetUserRoomAsync(userId);
+        string? gameType = null;
+
+        if (!string.IsNullOrEmpty(activeRoomId))
+        {
+            gameType = await roomRegistry.GetGameTypeAsync(activeRoomId);
+        }
+
+        return new PlayerProfileResponse(
+            profile.UserId,
+            profile.Coins,
+            activeRoomId,
+            gameType
+        );
     }
 }

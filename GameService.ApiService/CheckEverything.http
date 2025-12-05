@@ -6,14 +6,24 @@
 # ==========================================
 # 0. CONFIGURATION & SEEDS
 # ==========================================
-@adminEmail = admin@gameservice.com
-@adminPassword = AdminPass123!
-@adminApiKey = DevOnlyAdminKey-ChangeInProduction!
+# NOTE: These are DEVELOPMENT-ONLY values.
+# In production, credentials come from environment variables:
+# - AdminSettings__ApiKey
+# - GameService__AdminSeed__Email
+# - GameService__AdminSeed__Password
+#
+# Generate a secure API key with:
+# dotnet run --project GameService.ApiService -- --generate-api-key
+# ==========================================
 
-# Dynamic User Credentials
-@userEmail = player_{{$randomInt}}@test.com
-@userPassword = UserPass123!
-@user2Email = player2_{{$randomInt}}@test.com
+@adminEmail = admin@gameservice.local
+@adminPassword = DevAdmin!2024#Secure
+@adminApiKey = Dev-Only-Key-ChangeInProd-abc123xyz789!@#$
+
+# Dynamic User Credentials (for testing only)
+@userEmail = player_{{$randomInt}}@test.local
+@userPassword = TestUser!2024#Pass
+@user2Email = player2_{{$randomInt}}@test.local
 
 ###
 # @name HealthCheck

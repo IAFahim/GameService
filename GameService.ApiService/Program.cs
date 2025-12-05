@@ -1,6 +1,3 @@
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading.RateLimiting;
 using GameService.ApiService;
 using GameService.ApiService.Features.Admin;
@@ -31,6 +28,10 @@ builder.AddNpgsqlDbContext<GameDbContext>("postgresdb");
 builder.AddRedisClient("cache");
 
 builder.Services.Configure<GameServiceOptions>(builder.Configuration.GetSection(GameServiceOptions.SectionName));
+builder.Services.Configure<AdminSettings>(builder.Configuration.GetSection(AdminSettings.SectionName));
+
+// Add security validation
+builder.Services.AddSecurityValidation();
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -129,6 +130,9 @@ builder.Services.AddSignalR()
 
 var app = builder.Build();
 
+// Validate security settings before starting
+app.ValidateSecurity();
+
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
     app.MapOpenApi();
@@ -149,46 +153,8 @@ app.UseRateLimiter();
 
 app.UseAuthentication();
 
-// API Key authentication middleware with enhanced validation
-app.Use(async (context, next) =>
-{
-    var apiKey = context.Request.Headers["X-Admin-Key"].FirstOrDefault();
-    var configuredKey = context.RequestServices.GetRequiredService<IConfiguration>()["AdminSettings:ApiKey"];
-    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-    var env = context.RequestServices.GetRequiredService<IHostEnvironment>();
-
-    // Warn if API key is not configured in production
-    if (!env.IsDevelopment() && string.IsNullOrEmpty(configuredKey) && 
-        context.Request.Path.StartsWithSegments("/admin"))
-    {
-        logger.LogWarning("Admin API key not configured. Set AdminSettings:ApiKey environment variable.");
-    }
-
-    if (!string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(configuredKey))
-    {
-        // Minimum key length validation
-        if (configuredKey.Length < 32)
-        {
-            logger.LogWarning("Admin API key is too short. Use at least 32 characters for security.");
-        }
-
-        if (CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(apiKey),
-                Encoding.UTF8.GetBytes(configuredKey)))
-        {
-            var claims = new[]
-            {
-                new Claim(ClaimTypes.Role, "Admin"),
-                new Claim(ClaimTypes.NameIdentifier, "api-key-admin"),
-                new Claim(ClaimTypes.AuthenticationMethod, "ApiKey")
-            };
-            var identity = new ClaimsIdentity(claims, "ApiKey");
-            context.User = new ClaimsPrincipal(identity);
-        }
-    }
-
-    await next();
-});
+// API Key authentication middleware (proper implementation)
+app.UseApiKeyAuthentication();
 
 app.UseAuthorization();
 

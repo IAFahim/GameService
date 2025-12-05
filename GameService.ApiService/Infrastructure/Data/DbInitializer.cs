@@ -19,39 +19,69 @@ public static class DbInitializer
 
         await db.Database.EnsureCreatedAsync();
 
-        if (!await roleManager.RoleExistsAsync("Admin")) await roleManager.CreateAsync(new IdentityRole("Admin"));
+        if (!await roleManager.RoleExistsAsync("Admin")) 
+            await roleManager.CreateAsync(new IdentityRole("Admin"));
 
         var adminEmail = options.AdminSeed.Email;
         var adminPassword = options.AdminSeed.Password;
 
-        // Validate admin credentials are configured in production
-        if (!env.IsDevelopment() && (string.IsNullOrEmpty(adminEmail) || string.IsNullOrEmpty(adminPassword)))
+        // In production, credentials MUST come from environment variables/secrets
+        if (!env.IsDevelopment())
         {
-            logger.LogWarning("Admin seed credentials not configured. Set GameService:AdminSeed:Email and GameService:AdminSeed:Password environment variables.");
-            return;
+            if (string.IsNullOrEmpty(adminEmail) || string.IsNullOrEmpty(adminPassword))
+            {
+                logger.LogInformation(
+                    "Admin seed credentials not configured in production. " +
+                    "Create admin account manually or set environment variables: " +
+                    "GameService__AdminSeed__Email and GameService__AdminSeed__Password");
+                return;
+            }
+        }
+        else
+        {
+            // Development only - use configured values or skip
+            if (string.IsNullOrEmpty(adminEmail) || string.IsNullOrEmpty(adminPassword))
+            {
+                logger.LogDebug("Admin seed skipped - no credentials configured in development");
+                return;
+            }
         }
 
-        // Use defaults only in development
-        if (env.IsDevelopment())
+        if (await userManager.FindByEmailAsync(adminEmail) is null)
         {
-            if (string.IsNullOrEmpty(adminEmail)) adminEmail = "admin@gameservice.com";
-            if (string.IsNullOrEmpty(adminPassword)) adminPassword = "AdminPass123!";
-        }
-
-        if (!string.IsNullOrEmpty(adminEmail) && await userManager.FindByEmailAsync(adminEmail) is null)
-        {
-            var admin = new ApplicationUser { UserName = adminEmail, Email = adminEmail, EmailConfirmed = true };
+            var admin = new ApplicationUser 
+            { 
+                UserName = adminEmail, 
+                Email = adminEmail, 
+                EmailConfirmed = true 
+            };
+            
             var result = await userManager.CreateAsync(admin, adminPassword);
             if (result.Succeeded)
             {
                 await userManager.AddToRoleAsync(admin, "Admin");
-                db.PlayerProfiles.Add(new PlayerProfile { UserId = admin.Id, Coins = options.AdminSeed.InitialCoins });
+                db.PlayerProfiles.Add(new PlayerProfile 
+                { 
+                    UserId = admin.Id, 
+                    Coins = options.AdminSeed.InitialCoins 
+                });
                 await db.SaveChangesAsync();
-                logger.LogInformation("Admin account created: {Email}", adminEmail);
+                
+                // Don't log the email in production - security
+                if (env.IsDevelopment())
+                {
+                    logger.LogInformation("Admin account created: {Email}", adminEmail);
+                }
+                else
+                {
+                    logger.LogInformation("Admin account created successfully");
+                }
             }
             else
             {
-                logger.LogError("Failed to create admin account: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
+                logger.LogError(
+                    "Failed to create admin account: {Errors}", 
+                    string.Join(", ", result.Errors.Select(e => e.Description)));
             }
         }
     }

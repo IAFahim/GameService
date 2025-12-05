@@ -122,4 +122,28 @@ public class SecurityOptions
     /// Require HTTPS in production environment
     /// </summary>
     public bool RequireHttpsInProduction { get; set; } = true;
+
+    /// <summary>
+    /// Minimum length for API keys (enforced in production)
+    /// </summary>
+    public int MinimumApiKeyLength { get; set; } = 32;
+
+    /// <summary>
+    /// Block requests if API key validation fails in production
+    /// </summary>
+    public bool EnforceApiKeyValidation { get; set; } = true;
+}
+
+/// <summary>
+/// Admin API settings - separate from GameService options for cleaner separation
+/// </summary>
+public class AdminSettings
+{
+    public const string SectionName = "AdminSettings";
+    
+    /// <summary>
+    /// API Key for admin access. MUST be set via environment variable in production.
+    /// Use: AdminSettings__ApiKey or AdminSettings:ApiKey
+    /// </summary>
+    public string ApiKey { get; set; } = "";
 }

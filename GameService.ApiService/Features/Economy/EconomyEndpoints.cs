@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using GameService.ServiceDefaults.Data;
 using GameService.ServiceDefaults.DTOs;
+using GameService.ServiceDefaults.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,16 @@ public static class EconomyEndpoints
     {
         var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+        // Input validation
+        if (!InputValidator.IsValidCoinAmount(req.Amount))
+            return Results.BadRequest("Invalid amount");
+        
+        if (!InputValidator.IsValidReferenceId(req.ReferenceId))
+            return Results.BadRequest("Invalid reference ID format");
+        
+        if (!InputValidator.IsValidIdempotencyKey(req.IdempotencyKey))
+            return Results.BadRequest("Invalid idempotency key format");
 
         // SECURITY: Users can only debit (spend) coins, not credit themselves
         // Credits must come from game engines or admin endpoints with valid ReferenceId
@@ -54,8 +65,9 @@ public static class EconomyEndpoints
         var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-        if (pageSize > 100) pageSize = 100;
-        if (page < 1) page = 1;
+        // Clamp pagination values
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(1, page);
 
         var transactions = await db.WalletTransactions
             .AsNoTracking()

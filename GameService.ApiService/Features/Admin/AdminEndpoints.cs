@@ -4,6 +4,7 @@ using GameService.GameCore;
 using GameService.ServiceDefaults;
 using GameService.ServiceDefaults.Data;
 using GameService.ServiceDefaults.DTOs;
+using GameService.ServiceDefaults.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +19,7 @@ public static class AdminEndpoints
 
         group.MapGet("/templates", GetTemplates);
         group.MapPost("/templates", CreateTemplate);
-        group.MapDelete("/templates/{id}", DeleteTemplate);
+        group.MapDelete("/templates/{id:int}", DeleteTemplate);
 
         group.MapPost("/games", CreateAdHocGame);
         group.MapPost("/games/create-from-template", CreateGameFromTemplate);
@@ -42,40 +43,34 @@ public static class AdminEndpoints
     {
         var logger = loggerFactory.CreateLogger("AdminEndpoints");
         
-        // Validate required fields
-        if (string.IsNullOrWhiteSpace(req.Name))
-            return Results.BadRequest("Template name is required");
+        // Input validation with security checks
+        if (!InputValidator.IsValidTemplateName(req.Name))
+            return Results.BadRequest("Invalid template name (alphanumeric, spaces, hyphens only, max 100 chars)");
         
-        if (string.IsNullOrWhiteSpace(req.GameType))
-            return Results.BadRequest("Game type is required");
+        if (!InputValidator.IsValidGameType(req.GameType))
+            return Results.BadRequest("Invalid game type (alphanumeric only)");
         
-        if (req.MaxPlayers < 1 || req.MaxPlayers > 100)
+        if (req.MaxPlayers is < 1 or > 100)
             return Results.BadRequest("Max players must be between 1 and 100");
         
-        if (req.EntryFee < 0)
-            return Results.BadRequest("Entry fee cannot be negative");
+        if (req.EntryFee < 0 || !InputValidator.IsValidCoinAmount(req.EntryFee))
+            return Results.BadRequest("Invalid entry fee");
         
-        // Validate ConfigJson if provided
-        if (!string.IsNullOrEmpty(req.ConfigJson))
-        {
-            try
-            {
-                JsonSerializer.Deserialize<Dictionary<string, object>>(req.ConfigJson);
-            }
-            catch (JsonException ex)
-            {
-                logger.LogWarning(ex, "Invalid ConfigJson provided for template {Name}", req.Name);
-                return Results.BadRequest("Invalid configuration JSON format");
-            }
-        }
+        if (!InputValidator.IsValidConfigJson(req.ConfigJson))
+            return Results.BadRequest("Invalid configuration JSON format or exceeds size limit");
         
         var template = new GameRoomTemplate
         {
-            Name = req.Name, GameType = req.GameType, MaxPlayers = req.MaxPlayers, EntryFee = req.EntryFee,
+            Name = req.Name, 
+            GameType = req.GameType, 
+            MaxPlayers = req.MaxPlayers, 
+            EntryFee = req.EntryFee,
             ConfigJson = req.ConfigJson
         };
         db.RoomTemplates.Add(template);
         await db.SaveChangesAsync();
+        
+        logger.LogInformation("Template created: {TemplateId} ({Name})", template.Id, InputValidator.SanitizeForLogging(req.Name));
         return Results.Ok(template.Id);
     }
 
@@ -90,6 +85,9 @@ public static class AdminEndpoints
         GameDbContext db,
         IServiceProvider sp)
     {
+        if (req.TemplateId <= 0)
+            return Results.BadRequest("Invalid template ID");
+            
         var template = await db.RoomTemplates.FindAsync(req.TemplateId);
         if (template == null) return Results.NotFound("Template not found");
 
@@ -101,6 +99,16 @@ public static class AdminEndpoints
         [FromBody] CreateGameRequest req,
         IServiceProvider sp)
     {
+        // Validate inputs
+        if (!InputValidator.IsValidGameType(req.GameType))
+            return Results.BadRequest("Invalid game type format");
+        
+        if (!InputValidator.IsValidCoinAmount(req.EntryFee) || req.EntryFee < 0)
+            return Results.BadRequest("Invalid entry fee");
+        
+        if (!InputValidator.IsValidConfigJson(req.ConfigJson))
+            return Results.BadRequest("Invalid config JSON");
+            
         return await CreateGameInternal(sp, req.GameType, req.PlayerCount, req.EntryFee, req.ConfigJson);
     }
 
@@ -111,14 +119,14 @@ public static class AdminEndpoints
         long entryFee,
         string? configJson)
     {
-        if (string.IsNullOrWhiteSpace(gameType))
-            return Results.BadRequest("Game type is required");
+        if (!InputValidator.IsValidGameType(gameType))
+            return Results.BadRequest("Invalid game type");
 
-        if (maxPlayers < 1 || maxPlayers > 100)
+        if (maxPlayers is < 1 or > 100)
             return Results.BadRequest("Max players must be between 1 and 100");
 
         var roomService = sp.GetKeyedService<IGameRoomService>(gameType);
-        if (roomService == null) return Results.BadRequest($"Game type '{gameType}' not supported");
+        if (roomService == null) return Results.BadRequest($"Game type '{InputValidator.SanitizeForLogging(gameType)}' not supported");
 
         var logger = sp.GetRequiredService<ILogger<IGameRoomService>>();
         var configDict = new Dictionary<string, string>();
@@ -132,7 +140,7 @@ public static class AdminEndpoints
             }
             catch (JsonException ex)
             {
-                logger.LogWarning(ex, "Invalid JSON config provided for game type {GameType}", gameType);
+                logger.LogWarning(ex, "Invalid JSON config provided for game type {GameType}", InputValidator.SanitizeForLogging(gameType));
                 return Results.BadRequest("Invalid configuration JSON format");
             }
 
@@ -151,18 +159,24 @@ public static class AdminEndpoints
 
     private static async Task<IResult> GetGameState(string roomId, IServiceProvider sp, IRoomRegistry registry)
     {
+        if (!InputValidator.IsValidRoomId(roomId))
+            return Results.BadRequest("Invalid room ID format");
+            
         var gameType = await registry.GetGameTypeAsync(roomId);
-        if (gameType == null) return Results.NotFound($"Room '{roomId}' not found");
+        if (gameType == null) return Results.NotFound("Room not found");
         var engine = sp.GetKeyedService<IGameEngine>(gameType);
-        if (engine == null) return Results.NotFound($"Game engine for '{gameType}' not available");
+        if (engine == null) return Results.NotFound("Game engine not available");
         var state = await engine.GetStateAsync(roomId);
         return state != null ? Results.Ok(state) : Results.NotFound();
     }
 
     private static async Task<IResult> DeleteGame(string roomId, IServiceProvider sp, IRoomRegistry registry)
     {
+        if (!InputValidator.IsValidRoomId(roomId))
+            return Results.BadRequest("Invalid room ID format");
+            
         var gameType = await registry.GetGameTypeAsync(roomId);
-        if (gameType == null) return Results.NotFound($"Room '{roomId}' not found");
+        if (gameType == null) return Results.NotFound("Room not found");
         var roomService = sp.GetKeyedService<IGameRoomService>(gameType);
         if (roomService != null) await roomService.DeleteRoomAsync(roomId);
         return Results.Ok(new { RoomId = roomId, Deleted = true });
@@ -176,8 +190,12 @@ public static class AdminEndpoints
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
-        if (pageSize > 100) pageSize = 100;
-        if (page < 1) page = 1;
+        // Validate optional gameType filter
+        if (!string.IsNullOrEmpty(gameType) && !InputValidator.IsValidGameType(gameType))
+            return Results.BadRequest("Invalid game type filter");
+            
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(1, page);
 
         var allGames = new List<GameRoomDto>();
 
@@ -220,6 +238,9 @@ public static class AdminEndpoints
     private static async Task<IResult> GetPlayers(GameDbContext db, [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(1, page);
+        
         var players = await db.PlayerProfiles
             .AsNoTracking()
             .Where(p => !p.IsDeleted)
@@ -242,6 +263,14 @@ public static class AdminEndpoints
         ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger("AdminEndpoints");
+        
+        // Validate inputs
+        if (!InputValidator.IsValidUserId(userId))
+            return Results.BadRequest("Invalid user ID format");
+        
+        if (!InputValidator.IsValidCoinAmount(req.Amount))
+            return Results.BadRequest("Invalid amount");
+        
         var adminId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "api-key-admin";
         
         var rows = await db.PlayerProfiles.Where(p => p.UserId == userId).ExecuteUpdateAsync(setters =>
@@ -257,15 +286,15 @@ public static class AdminEndpoints
             Amount = req.Amount,
             BalanceAfter = profile.Coins,
             TransactionType = "AdminAdjust",
-            Description = $"Admin adjustment by {adminId}",
-            ReferenceId = $"ADMIN:{adminId}",
+            Description = $"Admin adjustment by {InputValidator.SanitizeForLogging(adminId, 50)}",
+            ReferenceId = $"ADMIN:{InputValidator.SanitizeForLogging(adminId, 50)}",
             CreatedAt = DateTimeOffset.UtcNow
         };
         db.WalletTransactions.Add(auditEntry);
         await db.SaveChangesAsync();
         
         logger.LogInformation("Admin {AdminId} adjusted coins for user {UserId} by {Amount}. New balance: {Balance}",
-            adminId, userId, req.Amount, profile.Coins);
+            InputValidator.SanitizeForLogging(adminId, 50), userId, req.Amount, profile.Coins);
         
         await publisher.PublishPlayerUpdatedAsync(new PlayerUpdatedMessage(profile.UserId, profile.Coins,
             profile.User?.UserName, profile.User?.Email));
@@ -273,8 +302,12 @@ public static class AdminEndpoints
     }
 
     private static async Task<IResult> DeletePlayer(string userId, UserManager<ApplicationUser> userManager,
-        GameDbContext db, IGameEventPublisher publisher)
+        GameDbContext db, IGameEventPublisher publisher, ILoggerFactory loggerFactory)
     {
+        if (!InputValidator.IsValidUserId(userId))
+            return Results.BadRequest("Invalid user ID format");
+            
+        var logger = loggerFactory.CreateLogger("AdminEndpoints");
         var user = await userManager.FindByIdAsync(userId);
         if (user == null) return Results.NotFound();
 
@@ -286,11 +319,13 @@ public static class AdminEndpoints
 
         if (rows == 0)
         {
+            logger.LogWarning("Attempted to delete already-deleted player {UserId}", userId);
         }
 
         var result = await userManager.DeleteAsync(user);
         if (!result.Succeeded) return Results.BadRequest(result.Errors);
 
+        logger.LogInformation("Player deleted: {UserId}", userId);
         await publisher.PublishPlayerUpdatedAsync(new PlayerUpdatedMessage(userId, 0, user.UserName, user.Email,
             PlayerChangeType.Deleted));
         return Results.Ok();

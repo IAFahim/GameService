@@ -61,15 +61,22 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
 
     public async Task<GameActionResult> ExecuteAsync(string roomId, GameCommand command)
     {
-        var actionSpan = command.Action.AsSpan();
+        try
+        {
+            var actionSpan = command.Action.AsSpan();
 
-        if (actionSpan.Equals(LudoActions.Roll, StringComparison.OrdinalIgnoreCase))
-            return await HandleRollAsync(roomId, command.UserId);
+            if (actionSpan.Equals(LudoActions.Roll, StringComparison.OrdinalIgnoreCase))
+                return await HandleRollAsync(roomId, command.UserId);
 
-        if (actionSpan.StartsWith(LudoActions.Move, StringComparison.OrdinalIgnoreCase))
-            return await HandleMoveAsync(roomId, command.UserId, command.GetInt("tokenIndex"));
+            if (actionSpan.StartsWith(LudoActions.Move, StringComparison.OrdinalIgnoreCase))
+                return await HandleMoveAsync(roomId, command.UserId, command.GetInt("tokenIndex"));
 
-        return GameActionResult.Error($"Unknown action: {command.Action}");
+            return GameActionResult.Error($"Unknown action: {command.Action}");
+        }
+        catch (Exception ex)
+        {
+            return GameActionResult.Error($"Ludo Engine Error: {ex.GetType().Name} - {ex.Message}");
+        }
     }
 
     public async Task<GameActionResult?> CheckTimeoutsAsync(string roomId)
@@ -116,12 +123,21 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
         await _repository.SaveAsync(roomId, engine.State, newMeta);
 
         var finalState = engine.State;
+        var response = new GameStateResponse
+        {
+            RoomId = roomId,
+            GameType = GameType,
+            Meta = newMeta,
+            State = MapToDto(ref finalState, newMeta),
+            LegalMoves = []
+        };
+
         return new GameActionResult
         {
             Success = true,
             ShouldBroadcast = true,
             Events = events,
-            NewState = MapToDto(ref finalState, newMeta)
+            NewState = response
         };
     }
 
@@ -205,8 +221,16 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
         await _repository.SaveAsync(roomId, engine.State, newMeta);
 
         var finalState = engine.State;
+        var response = new GameStateResponse
+        {
+            RoomId = roomId,
+            GameType = GameType,
+            Meta = newMeta,
+            State = MapToDto(ref finalState, newMeta),
+            LegalMoves = []
+        };
         return new GameActionResult
-            { Success = true, ShouldBroadcast = true, Events = events, NewState = MapToDto(ref finalState, newMeta) };
+            { Success = true, ShouldBroadcast = true, Events = events, NewState = response };
     }
 
     private async Task<GameActionResult> HandleMoveAsync(string roomId, string userId, int tIdx)
@@ -230,6 +254,14 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
 
         var finalState = engine.State;
         var stateDto = MapToDto(ref finalState, newMeta);
+        var response = new GameStateResponse
+        {
+            RoomId = roomId,
+            GameType = GameType,
+            Meta = newMeta,
+            State = stateDto,
+            LegalMoves = []
+        };
 
         if (res.Status.HasFlag(LudoStatus.ErrorGameEnded))
         {
@@ -238,7 +270,7 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
             var totalPot = ctx.Meta.EntryFee * ctx.Meta.PlayerSeats.Count;
 
             return GameActionResult.GameOver(
-                stateDto,
+                response,
                 new GameEndedInfo(
                     roomId,
                     GameType,
@@ -249,7 +281,7 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
                 events.ToArray());
         }
 
-        return new GameActionResult { Success = true, ShouldBroadcast = true, Events = events, NewState = stateDto };
+        return new GameActionResult { Success = true, ShouldBroadcast = true, Events = events, NewState = response };
     }
 
     private List<string> GetWinnerRanking(ref LudoState state, GameRoomMeta meta)

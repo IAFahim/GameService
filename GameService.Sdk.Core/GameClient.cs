@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace GameService.Sdk.Core;
@@ -29,6 +30,10 @@ public sealed class GameClient : IAsyncDisposable
 
     /// <summary>The room you're currently in (null if not in a room)</summary>
     public string? CurrentRoomId { get; private set; }
+
+    // NEW: Latency monitoring
+    public int LatencyMs { get; private set; }
+    public event Action<int>? OnLatencyUpdate;
 
     // ═══════════════════════════════════════════════════════════════
     // 🎯 EVENTS - Subscribe to these for real-time updates!
@@ -66,6 +71,7 @@ public sealed class GameClient : IAsyncDisposable
         _hub = hub;
         _baseUrl = baseUrl;
         SetupEventHandlers();
+        _hub.KeepAliveInterval = TimeSpan.FromSeconds(15);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -76,12 +82,12 @@ public sealed class GameClient : IAsyncDisposable
     /// 🔌 Connect to the game server!
     /// </summary>
     /// <param name="baseUrl">Server URL (e.g., "https://api.example.com")</param>
-    /// <param name="accessToken">Your JWT access token from login</param>
+    /// <param name="accessTokenProvider">Provider for JWT access token</param>
     /// <param name="cancellationToken">Optional cancellation token</param>
     /// <returns>A connected GameClient ready for action!</returns>
     public static async Task<GameClient> ConnectAsync(
         string baseUrl,
-        string accessToken,
+        Func<Task<string?>> accessTokenProvider,
         CancellationToken cancellationToken = default)
     {
         var hubUrl = baseUrl.TrimEnd('/') + "/hubs/game";
@@ -89,7 +95,7 @@ public sealed class GameClient : IAsyncDisposable
         var hub = new HubConnectionBuilder()
             .WithUrl(hubUrl, options =>
             {
-                options.AccessTokenProvider = () => Task.FromResult<string?>(accessToken);
+                options.AccessTokenProvider = accessTokenProvider;
             })
             .WithAutomaticReconnect(new RetryPolicy())
             .Build();
@@ -100,9 +106,42 @@ public sealed class GameClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// 🔌 Connect to the game server! (Legacy overload)
+    /// </summary>
+    public static Task<GameClient> ConnectAsync(
+        string baseUrl,
+        string accessToken,
+        CancellationToken cancellationToken = default)
+    {
+        return ConnectAsync(baseUrl, () => Task.FromResult<string?>(accessToken), cancellationToken);
+    }
+
+    /// <summary>
     /// 🔌 Create a client builder for advanced configuration
     /// </summary>
     public static GameClientBuilder Create(string baseUrl) => new(baseUrl);
+
+    // NEW: Manual Latency Check
+    public async Task<int> PingAsync()
+    {
+        EnsureConnected();
+        var sw = Stopwatch.StartNew();
+        
+        if (CurrentRoomId != null)
+        {
+            await _hub.InvokeAsync("GetSpectatorCount", CurrentRoomId);
+        }
+        else
+        {
+             using var http = new HttpClient();
+             await http.GetAsync(_baseUrl + "/alive");
+        }
+        
+        sw.Stop();
+        LatencyMs = (int)sw.ElapsedMilliseconds;
+        OnLatencyUpdate?.Invoke(LatencyMs);
+        return LatencyMs;
+    }
 
     // ═══════════════════════════════════════════════════════════════
     // 🏠 ROOM MANAGEMENT - Create, join, leave rooms
@@ -366,15 +405,22 @@ public sealed class GameClient : IAsyncDisposable
 public sealed class GameClientBuilder
 {
     private readonly string _baseUrl;
-    private string? _accessToken;
+    private Func<Task<string?>>? _tokenProvider;
     private Action<HubConnectionBuilder>? _configure;
 
     internal GameClientBuilder(string baseUrl) => _baseUrl = baseUrl;
 
+    /// <summary>Set the access token provider</summary>
+    public GameClientBuilder WithAccessTokenProvider(Func<Task<string?>> provider)
+    {
+        _tokenProvider = provider;
+        return this;
+    }
+
     /// <summary>Set the access token</summary>
     public GameClientBuilder WithAccessToken(string token)
     {
-        _accessToken = token;
+        _tokenProvider = () => Task.FromResult<string?>(token);
         return this;
     }
 
@@ -388,9 +434,9 @@ public sealed class GameClientBuilder
     /// <summary>Build and connect!</summary>
     public Task<GameClient> ConnectAsync(CancellationToken cancellationToken = default)
     {
-        if (_accessToken == null)
-            throw new InvalidOperationException("Access token is required. Call WithAccessToken() first.");
+        if (_tokenProvider == null)
+            throw new InvalidOperationException("Access token provider is required. Call WithAccessToken() or WithAccessTokenProvider() first.");
         
-        return GameClient.ConnectAsync(_baseUrl, _accessToken, cancellationToken);
+        return GameClient.ConnectAsync(_baseUrl, _tokenProvider, cancellationToken);
     }
 }

@@ -227,7 +227,14 @@ public sealed class GameSession
     /// </summary>
     public Task<GameClient> ConnectToGameAsync(CancellationToken cancellationToken = default)
     {
-        return GameClient.ConnectAsync(_baseUrl, AccessToken, cancellationToken);
+        return GameClient.ConnectAsync(
+            _baseUrl, 
+            async () => 
+            {
+                // In a real app, check expiration and refresh if needed
+                return AccessToken;
+            }, 
+            cancellationToken);
     }
 
     /// <summary>

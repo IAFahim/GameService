@@ -16,7 +16,7 @@ public sealed class LuckyMineEngine(
     public async Task<GameActionResult> ExecuteAsync(string roomId, GameCommand command)
     {
         var action = command.Action.AsSpan();
-        if (action.Equals("click", StringComparison.OrdinalIgnoreCase))
+        if (action.Equals("click", StringComparison.OrdinalIgnoreCase) || action.Equals("Reveal", StringComparison.OrdinalIgnoreCase))
             return await HandleClickAsync(roomId, command.UserId, command.GetInt("tileIndex"));
         if (action.Equals("cashout", StringComparison.OrdinalIgnoreCase))
             return await HandleCashoutAsync(roomId, command.UserId);
@@ -107,8 +107,17 @@ public sealed class LuckyMineEngine(
 
             await _repository.SaveAsync(roomId, state, ctx.Meta);
 
+            var response = new GameStateResponse
+            {
+                RoomId = roomId,
+                GameType = GameType,
+                Meta = ctx.Meta,
+                State = MapToDto(ref state),
+                LegalMoves = _noActions
+            };
+
             return GameActionResult.GameOver(
-                MapToDto(ref state),
+                response,
                 new GameEndedInfo(
                     roomId,
                     GameType,
@@ -131,11 +140,20 @@ public sealed class LuckyMineEngine(
 
         await _repository.SaveAsync(roomId, state, ctx.Meta);
 
+        var activeResponse = new GameStateResponse
+        {
+            RoomId = roomId,
+            GameType = GameType,
+            Meta = ctx.Meta,
+            State = MapToDto(ref state),
+            LegalMoves = _legalActions
+        };
+
         return new GameActionResult
         {
             Success = true,
             ShouldBroadcast = true,
-            NewState = MapToDto(ref state),
+            NewState = activeResponse,
             Events = events
         };
     }
@@ -166,8 +184,17 @@ public sealed class LuckyMineEngine(
 
         await _repository.SaveAsync(roomId, state, ctx.Meta);
 
+        var cashoutResponse = new GameStateResponse
+        {
+            RoomId = roomId,
+            GameType = GameType,
+            Meta = ctx.Meta,
+            State = MapToDto(ref state),
+            LegalMoves = _noActions
+        };
+
         return GameActionResult.GameOver(
-            MapToDto(ref state),
+            cashoutResponse,
             new GameEndedInfo(
                 roomId,
                 GameType,

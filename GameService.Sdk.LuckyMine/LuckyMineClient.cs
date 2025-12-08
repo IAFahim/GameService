@@ -113,21 +113,21 @@ public sealed class LuckyMineClient
     {
         if (tileIndex < 0 || tileIndex >= TotalTiles)
         {
-            return new RevealResult(false, false, 0, $"Tile index must be 0-{TotalTiles - 1}");
+            return new RevealResult(false, false, 0, 0, $"Tile index must be 0-{TotalTiles - 1}");
         }
 
         var result = await _client.PerformActionAsync("Reveal", new { TileIndex = tileIndex });
         
         if (!result.Success)
         {
-            return new RevealResult(false, false, 0, result.Error);
+            return new RevealResult(false, false, 0, 0, result.Error);
         }
 
         var state = ParseState(result.NewState);
         var isMine = state?.Status == LuckyMineStatus.HitMine;
         var winnings = state?.CurrentWinnings ?? 0;
 
-        return new RevealResult(true, isMine, winnings, null);
+        return new RevealResult(true, isMine, winnings, state?.NextTileWinnings ?? 0, null);
     }
 
     /// <summary>
@@ -329,6 +329,7 @@ public sealed class LuckyMineState
     public int EntryCost { get; set; }
     public float RewardSlope { get; set; }
     public long CurrentWinnings { get; set; }
+    public long NextTileWinnings { get; set; }
 
     public bool IsMine(int index)
     {
@@ -348,7 +349,7 @@ public sealed class LuckyMineState
 }
 
 /// <summary>Result of revealing a tile</summary>
-public sealed record RevealResult(bool Success, bool IsMine, long CurrentWinnings, string? Error);
+public sealed record RevealResult(bool Success, bool IsMine, long CurrentWinnings, long NextTileWinnings, string? Error);
 
 /// <summary>Result of cashing out</summary>
 public sealed record CashOutResult(bool Success, long Amount, string? Error);

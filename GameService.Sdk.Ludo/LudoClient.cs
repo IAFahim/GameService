@@ -67,6 +67,9 @@ public sealed class LudoClient
     /// <summary>🔄 Turn changed to a different player</summary>
     public event Action<int>? OnTurnChanged;  // (newPlayerSeat)
 
+    /// <summary>⏰ Turn timed out (server forced a move or skip)</summary>
+    public event Action<int>? OnTurnTimeout; // (playerSeat)
+
     /// <summary>🏆 Game ended with a winner ranking</summary>
     public event Action<int[]>? OnGameEnded;  // (winnerRanking - seats in order of finishing)
 
@@ -96,6 +99,7 @@ public sealed class LudoClient
         if (result.Success)
         {
             MySeat = 0; // Creator is always seat 0
+            await _client.GetStateAsync();
         }
         return result;
     }
@@ -295,6 +299,14 @@ public sealed class LudoClient
                     var seat = finishData.GetProperty("seat").GetInt32();
                     var token = finishData.GetProperty("token").GetInt32();
                     OnTokenFinished?.Invoke(seat, token);
+                }
+                break;
+
+            case "TurnTimeout":
+                if (evt.Data is JsonElement timeoutData)
+                {
+                    var player = timeoutData.GetProperty("player").GetInt32();
+                    OnTurnTimeout?.Invoke(player);
                 }
                 break;
         }

@@ -448,7 +448,7 @@ public class GameHub(
         catch (Exception ex)
         {
             logger.LogError(ex, "Error executing action {Action} in room {RoomId}", actionName, roomId);
-            return GameActionResult.Error("An error occurred while processing your action");
+            return GameActionResult.Error($"An error occurred: {ex.Message}");
         }
         finally
         {

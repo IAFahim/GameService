@@ -108,7 +108,7 @@ public class SdkSmokeTests
         var joinResult = new Sdk.Core.JoinRoomResult(true, 0, null);
         var actionResult = new Sdk.Core.ActionResult(false, "Not your turn", null);
         var diceResult = new Sdk.Ludo.DiceRollResult(true, 6, true, new[] { 0, 2 }, null);
-        var revealResult = new Sdk.LuckyMine.RevealResult(true, false, 100, null);
+        var revealResult = new Sdk.LuckyMine.RevealResult(true, false, 100, 200, null);
 
         Assert.That(createResult.Success, Is.True);
         Assert.That(joinResult.Success, Is.True);

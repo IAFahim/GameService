@@ -10,7 +10,6 @@ public class SdkSmokeTests
     [Test]
     public void Sdk_Core_Types_Are_Accessible()
     {
-        // Verify core types can be instantiated
         var state = new Sdk.Core.GameState(
             RoomId: "ABC123",
             GameType: "Ludo",
@@ -29,7 +28,6 @@ public class SdkSmokeTests
     [Test]
     public void Sdk_Auth_Types_Are_Accessible()
     {
-        // Verify auth types
         var profile = new Sdk.Auth.PlayerProfile
         {
             UserId = "user-123",
@@ -45,17 +43,16 @@ public class SdkSmokeTests
     [Test]
     public void Sdk_Ludo_State_Parsing_Works()
     {
-        // Verify Ludo state can be created and queried
         var state = new Sdk.Ludo.LudoState
         {
             CurrentPlayer = 0,
             LastDiceRoll = 6,
             TurnId = 1,
-            ActiveSeatsMask = 0b1111, // All 4 seats active
+            ActiveSeatsMask = 0b1111,
             FinishedMask = 0b0000,
-            LegalMovesMask = 0b0101, // Tokens 0 and 2 can move
+            LegalMovesMask = 0b0101,
             IsGameOver = false,
-            Tokens = new byte[16] // 4 players * 4 tokens
+            Tokens = new byte[16]
         };
 
         Assert.That(state.CurrentPlayer, Is.EqualTo(0));
@@ -68,13 +65,12 @@ public class SdkSmokeTests
     [Test]
     public void Sdk_LuckyMine_State_BitMasks_Work()
     {
-        // Verify LuckyMine bitmask operations
         var state = new Sdk.LuckyMine.LuckyMineState
         {
             TotalTiles = 25,
             TotalMines = 5,
-            RevealedMask0 = 0b111, // Tiles 0, 1, 2 revealed
-            MineMask0 = 0b100,     // Tile 2 is a mine
+            RevealedMask0 = 0b111,
+            MineMask0 = 0b100,
             Status = Sdk.LuckyMine.LuckyMineStatus.Active,
             CurrentWinnings = 150
         };
@@ -91,7 +87,6 @@ public class SdkSmokeTests
     [Test]
     public void Sdk_Core_Connection_States_Are_Defined()
     {
-        // Verify all connection states exist
         var states = Enum.GetValues<Sdk.Core.ConnectionState>();
         
         Assert.That(states, Contains.Item(Sdk.Core.ConnectionState.Disconnected));
@@ -103,7 +98,6 @@ public class SdkSmokeTests
     [Test]
     public void Sdk_Result_Types_Have_Success_Property()
     {
-        // Verify all result types follow the pattern
         var createResult = new Sdk.Core.CreateRoomResult(true, "ABC123", null);
         var joinResult = new Sdk.Core.JoinRoomResult(true, 0, null);
         var actionResult = new Sdk.Core.ActionResult(false, "Not your turn", null);

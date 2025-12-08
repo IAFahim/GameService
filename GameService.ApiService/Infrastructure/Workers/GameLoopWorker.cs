@@ -4,11 +4,6 @@ using Microsoft.Extensions.Options;
 
 namespace GameService.ApiService.Infrastructure.Workers;
 
-/// <summary>
-///     Background worker that checks for turn timeouts across all active games.
-///     Uses Redis Sorted Sets with activity timestamps for efficient timeout detection.
-///     Only processes rooms that haven't had recent activity.
-/// </summary>
 public sealed class GameLoopWorker(
     IServiceProvider serviceProvider,
     IRoomRegistry roomRegistry,

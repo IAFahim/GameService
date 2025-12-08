@@ -8,11 +8,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GameService.ApiService.Infrastructure.Workers;
 
-/// <summary>
-///     Background worker that processes outbox messages for reliable event publishing.
-///     Ensures events are eventually delivered even if the initial publish failed.
-///     Uses transactional outbox pattern for guaranteed delivery.
-/// </summary>
 public sealed class OutboxProcessorWorker(
     IServiceProvider serviceProvider,
     IGameEventPublisher publisher,

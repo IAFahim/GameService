@@ -13,31 +13,18 @@ public interface IEconomyService
 {
     Task<TransactionResult> ProcessTransactionAsync(string userId, long amount, string? referenceId = null,
         string? idempotencyKey = null);
-
-    /// <summary>
-    ///     Deduct entry fee from player when joining a paid game.
-    ///     Returns a reservation that can be committed or refunded.
-    /// </summary>
+    
     Task<EntryFeeReservation> ReserveEntryFeeAsync(string userId, long entryFee, string roomId);
-
-    /// <summary>
-    ///     Commit a reserved entry fee (player successfully joined room)
-    /// </summary>
+    
     Task CommitEntryFeeAsync(EntryFeeReservation reservation);
 
-    /// <summary>
-    ///     Refund a reserved entry fee (player failed to join room)
-    /// </summary>
+    
     Task RefundEntryFeeAsync(EntryFeeReservation reservation);
 
-    /// <summary>
-    ///     Award winnings to player(s) when game ends
-    /// </summary>
+    
     Task<TransactionResult> AwardWinningsAsync(string userId, long amount, string roomId);
 
-    /// <summary>
-    ///     Process end-of-game payouts for all players
-    /// </summary>
+    
     Task<GamePayoutResult> ProcessGamePayoutsAsync(string roomId, string gameType, long totalPot,
         IReadOnlyDictionary<string, int> playerSeats, string? winnerUserId,
         IReadOnlyList<string>? winnerRanking = null);
@@ -59,9 +46,7 @@ public record TransactionResult(
     TransactionErrorType ErrorType = TransactionErrorType.None,
     string? ErrorMessage = null);
 
-/// <summary>
-///     Represents a reserved entry fee that can be committed or refunded
-/// </summary>
+
 public record EntryFeeReservation(
     bool Success,
     string UserId,
@@ -71,9 +56,7 @@ public record EntryFeeReservation(
     long NewBalance,
     string? ErrorMessage = null);
 
-/// <summary>
-///     Result of processing game payouts
-/// </summary>
+
 public record GamePayoutResult(
     bool Success,
     IReadOnlyDictionary<string, long> Payouts,

@@ -1,9 +1,5 @@
 namespace GameService.Sdk.Core;
 
-// ═══════════════════════════════════════════════════════════════
-// 🎮 CORE TYPES - Used across all games
-// ═══════════════════════════════════════════════════════════════
-
 /// <summary>Connection state</summary>
 public enum ConnectionState { Disconnected, Connecting, Connected, Reconnecting }
 
@@ -30,10 +26,6 @@ public sealed record SpectateResult(bool Success, string? Error);
 /// <summary>Result of a game action</summary>
 public sealed record ActionResult(bool Success, string? Error, object? NewState);
 
-// ═══════════════════════════════════════════════════════════════
-// 📨 EVENT TYPES - What you receive from the server
-// ═══════════════════════════════════════════════════════════════
-
 /// <summary>A player joined the room</summary>
 public sealed record PlayerJoined(string UserId, string UserName, int SeatIndex);
 
@@ -54,10 +46,6 @@ public sealed record GameEvent(string EventName, object Data, DateTimeOffset Tim
 
 /// <summary>Action error</summary>
 public sealed record ActionError(string Action, string Message);
-
-// ═══════════════════════════════════════════════════════════════
-// 🔌 WIRE PROTOCOL TYPES - Internal SignalR payloads
-// ═══════════════════════════════════════════════════════════════
 
 internal sealed record CreateRoomResponse(bool Success, string? RoomId, string? ErrorMessage);
 internal sealed record JoinRoomResponse(bool Success, int SeatIndex, string? ErrorMessage);

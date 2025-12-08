@@ -56,10 +56,6 @@ public class SdkIntegrationTests
         return (gameClient, login.Session);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🔐 AUTH SDK TESTS
-    // ═══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task Auth_Register_And_Login_Works()
     {
@@ -106,10 +102,6 @@ public class SdkIntegrationTests
             await client.DisposeAsync();
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 🔌 CORE SDK TESTS
-    // ═══════════════════════════════════════════════════════════════
 
     [Test]
     public async Task Core_Connect_Succeeds()
@@ -209,10 +201,6 @@ public class SdkIntegrationTests
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🎲 LUDO SDK TESTS
-    // ═══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task Ludo_CreateGame_Works()
     {
@@ -298,10 +286,6 @@ public class SdkIntegrationTests
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 💎 LUCKYMINE SDK TESTS
-    // ═══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task LuckyMine_StartGame_Works()
     {
@@ -332,7 +316,6 @@ public class SdkIntegrationTests
 
             var result = await mines.RevealTileAsync(0);
             Assert.That(result.Success, Is.True, $"Reveal failed: {result.Error}");
-            // Either hit mine or got winnings
             Assert.That(result.IsMine || result.CurrentWinnings >= 0, Is.True);
         }
         finally
@@ -352,7 +335,6 @@ public class SdkIntegrationTests
             await mines.StartGameAsync("3Mines");
             await Task.Delay(500);
 
-            // Try to reveal a safe tile first
             var reveal = await mines.RevealTileAsync(0);
             if (reveal.IsMine)
             {
@@ -403,11 +385,10 @@ public class SdkIntegrationTests
         
         try
         {
-            await mines.StartGameAsync("5Mines"); // 5 mines out of 25
+            await mines.StartGameAsync("5Mines");
             await Task.Delay(500);
 
             var prob = mines.GetNextRevealWinProbability();
-            // 20 safe / 25 total = 0.8
             Assert.That(prob, Is.InRange(0.7, 0.9));
         }
         finally

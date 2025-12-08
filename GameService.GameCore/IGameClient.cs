@@ -47,8 +47,6 @@ public interface IGameClient
     Task GameEvent(GameEventPayload payload);
 }
 
-// Payload records for strongly typed SignalR
-
 public sealed record PlayerJoinedPayload(string UserId, string UserName, int SeatIndex);
 
 public sealed record PlayerLeftPayload(string UserId, string UserName);

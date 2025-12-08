@@ -31,13 +31,8 @@ public sealed class GameClient : IAsyncDisposable
     /// <summary>The room you're currently in (null if not in a room)</summary>
     public string? CurrentRoomId { get; private set; }
 
-    // NEW: Latency monitoring
     public int LatencyMs { get; private set; }
     public event Action<int>? OnLatencyUpdate;
-
-    // ═══════════════════════════════════════════════════════════════
-    // 🎯 EVENTS - Subscribe to these for real-time updates!
-    // ═══════════════════════════════════════════════════════════════
 
     /// <summary>🎲 Fired when game state changes - this is your main update loop!</summary>
     public event Action<GameState>? OnGameState;
@@ -73,10 +68,6 @@ public sealed class GameClient : IAsyncDisposable
         SetupEventHandlers();
         _hub.KeepAliveInterval = TimeSpan.FromSeconds(15);
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 🚀 CONNECTION - Getting started
-    // ═══════════════════════════════════════════════════════════════
 
     /// <summary>
     /// 🔌 Connect to the game server!
@@ -121,7 +112,6 @@ public sealed class GameClient : IAsyncDisposable
     /// </summary>
     public static GameClientBuilder Create(string baseUrl) => new(baseUrl);
 
-    // NEW: Manual Latency Check
     public async Task<int> PingAsync()
     {
         EnsureConnected();
@@ -142,10 +132,6 @@ public sealed class GameClient : IAsyncDisposable
         OnLatencyUpdate?.Invoke(LatencyMs);
         return LatencyMs;
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 🏠 ROOM MANAGEMENT - Create, join, leave rooms
-    // ═══════════════════════════════════════════════════════════════
 
     /// <summary>
     /// 🏗️ Create a new game room from a template
@@ -214,10 +200,6 @@ public sealed class GameClient : IAsyncDisposable
         await _hub.InvokeAsync("StopSpectating", roomId);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🎮 GAME ACTIONS - Play the game!
-    // ═══════════════════════════════════════════════════════════════
-
     /// <summary>
     /// ⚡ Perform a game action (roll dice, move piece, reveal tile, etc.)
     /// </summary>
@@ -271,10 +253,6 @@ public sealed class GameClient : IAsyncDisposable
         return response == null ? null : MapGameState(response);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 💬 CHAT - Talk to other players
-    // ═══════════════════════════════════════════════════════════════
-
     /// <summary>
     /// 💬 Send a chat message to the room
     /// </summary>
@@ -285,10 +263,6 @@ public sealed class GameClient : IAsyncDisposable
         
         await _hub.InvokeAsync("SendChatMessage", CurrentRoomId, message);
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 🔧 INTERNAL HELPERS
-    // ═══════════════════════════════════════════════════════════════
 
     private void SetupEventHandlers()
     {

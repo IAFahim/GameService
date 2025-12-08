@@ -45,7 +45,6 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis) : IRoomRegis
 
     public async Task<IReadOnlyList<string>> GetAllRoomIdsAsync()
     {
-        // Use HSCAN instead of HKEYS to avoid blocking Redis on large datasets
         var result = new List<string>();
         var cursor = 0L;
         do
@@ -56,11 +55,9 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis) : IRoomRegis
                 result.Add(entry.Name.ToString());
             }
             cursor = scanResult.Length > 0 ? scanResult[^1].Name.GetHashCode() : 0;
-            // HashScanAsync uses IAsyncEnumerable, so we break after first iteration
             break;
         } while (cursor != 0);
-        
-        // Re-scan with IAsyncEnumerable for complete results
+
         result.Clear();
         await foreach (var entry in _db.HashScanAsync(GlobalRegistryKey, "*", 100))
         {
@@ -153,11 +150,8 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis) : IRoomRegis
 
     public async Task<IReadOnlyList<string>> GetRoomsNeedingTimeoutCheckAsync(string gameType, int maxRooms)
     {
-        // Use ZRANGEBYSCORE to only get rooms with activity older than timeout threshold
-        // This is O(log(N)+M) where M is the number of results, not O(N) like scanning all rooms
-        // Rooms with activity timestamp <= (now - timeout_buffer) are candidates for timeout
-        var maxScore = DateTimeOffset.UtcNow.AddSeconds(-5).ToUnixTimeSeconds(); // 5 second buffer
-        
+        var maxScore = DateTimeOffset.UtcNow.AddSeconds(-5).ToUnixTimeSeconds();
+
         var members = await _db.SortedSetRangeByScoreAsync(
             ActivityIndexKey(gameType),
             double.NegativeInfinity,

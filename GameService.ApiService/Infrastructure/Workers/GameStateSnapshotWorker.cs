@@ -5,11 +5,7 @@ using StackExchange.Redis;
 
 namespace GameService.ApiService.Infrastructure.Workers;
 
-/// <summary>
-///     Background worker that periodically snapshots active game states from Redis to PostgreSQL.
-///     Provides disaster recovery capability if Redis data is lost.
-///     Runs every 5 minutes by default.
-/// </summary>
+
 public sealed class GameStateSnapshotWorker(
     IServiceProvider serviceProvider,
     IConnectionMultiplexer redis,

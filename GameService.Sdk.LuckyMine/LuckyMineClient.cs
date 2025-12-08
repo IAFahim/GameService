@@ -65,21 +65,17 @@ public sealed class LuckyMineClient
     /// <summary>Whether you successfully cashed out</summary>
     public bool CashedOut => Status == LuckyMineStatus.CashedOut;
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🎯 LUCKYMINE-SPECIFIC EVENTS
-    // ═══════════════════════════════════════════════════════════════
-
     /// <summary>💎 A tile was revealed (safe or mine)</summary>
-    public event Action<int, bool>? OnTileRevealed;  // (tileIndex, isMine)
+    public event Action<int, bool>? OnTileRevealed;
 
     /// <summary>💰 Player cashed out successfully</summary>
-    public event Action<long>? OnCashedOut;  // (amount)
+    public event Action<long>? OnCashedOut;
 
     /// <summary>💥 Player hit a mine - game over!</summary>
     public event Action? OnMineHit;
 
     /// <summary>🎮 New game started</summary>
-    public event Action<int, int>? OnGameStarted;  // (totalTiles, totalMines)
+    public event Action<int, int>? OnGameStarted;
 
     /// <summary>📊 State updated</summary>
     public event Action<LuckyMineState>? OnStateUpdated;
@@ -90,10 +86,6 @@ public sealed class LuckyMineClient
         _client.OnGameState += HandleGameState;
         _client.OnGameEvent += HandleGameEvent;
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 🎮 GAME ACTIONS
-    // ═══════════════════════════════════════════════════════════════
 
     /// <summary>
     /// 🎮 Start a new LuckyMine game
@@ -145,10 +137,6 @@ public sealed class LuckyMineClient
 
         return new CashOutResult(true, currentWinnings, null);
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 📊 STATE HELPERS
-    // ═══════════════════════════════════════════════════════════════
 
     /// <summary>
     /// ❓ Check if a tile has been revealed
@@ -217,7 +205,7 @@ public sealed class LuckyMineClient
         if (_lastState == null || !IsActive) return 0;
 
         var remaining = TotalTiles - RevealedCount;
-        var remainingMines = TotalMines;  // All mines are still hidden until you hit one
+        var remainingMines = TotalMines;
 
         if (remaining <= 0) return 0;
         return (double)(remaining - remainingMines) / remaining;
@@ -232,10 +220,6 @@ public sealed class LuckyMineClient
         return (double)CurrentWinnings / _lastState.EntryCost;
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🔧 INTERNAL HELPERS
-    // ═══════════════════════════════════════════════════════════════
-
     private void HandleGameState(GameState state)
     {
         if (state.GameType != "LuckyMine") return;
@@ -248,7 +232,6 @@ public sealed class LuckyMineClient
 
         OnStateUpdated?.Invoke(mineState);
 
-        // Detect game start
         if (wasActive == false && mineState.Status == LuckyMineStatus.Active)
         {
             OnGameStarted?.Invoke(mineState.TotalTiles, mineState.TotalMines);
@@ -302,10 +285,6 @@ public sealed class LuckyMineClient
         }
     }
 }
-
-// ═══════════════════════════════════════════════════════════════
-// 📦 LUCKYMINE TYPES
-// ═══════════════════════════════════════════════════════════════
 
 /// <summary>Game status</summary>
 public enum LuckyMineStatus : byte

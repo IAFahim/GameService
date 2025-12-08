@@ -331,7 +331,6 @@ public class ServerDiceRoller : IDiceRoller
 {
     public byte Roll()
     {
-        // Use cryptographically secure RNG for money games
         return (byte)RandomNumberGenerator.GetInt32(1, 7);
     }
 }

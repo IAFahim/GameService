@@ -42,11 +42,9 @@ public static class AdminEndpoints
         GameDbContext db, 
         IRoomRegistry registry)
     {
-        // Run registry queries in parallel (safe - different service)
         var onlineTask = registry.GetOnlinePlayerCountAsync();
         var roomsTask = registry.GetAllRoomIdsAsync();
-        
-        // Run DB queries sequentially (DbContext is not thread-safe)
+
         var usersCount = await db.Users.CountAsync();
         var totalCoins = await db.PlayerProfiles.SumAsync(p => p.Coins);
 
@@ -264,7 +262,6 @@ public static class AdminEndpoints
             var cursor = (long)(page - 1) * pageSize;
             var (roomIds, _) = await registry.GetRoomIdsPagedAsync(module.GameName, cursor, pageSize);
 
-            // Use batch MGET instead of N individual GET calls
             var states = await engine.GetManyStatesAsync(roomIds.ToList());
 
             foreach (var state in states)

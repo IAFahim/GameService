@@ -69,7 +69,6 @@ public static class EconomyEndpoints
             .AsNoTracking()
             .Where(t => t.UserId == userId);
 
-        // QoL: Return pagination metadata for infinite scroll
         var totalCount = await query.CountAsync();
 
         var items = await query

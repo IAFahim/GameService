@@ -8,13 +8,6 @@ namespace GameService.ApiService.Infrastructure.Data;
 
 public static class DbInitializer
 {
-    /// <summary>
-    ///     Initialize database with migrations and seed data.
-    ///     In Development: Uses EnsureCreated for rapid iteration (no migration files needed).
-    ///     In Production: Uses Migrate() to apply pending migrations safely.
-    ///     IMPORTANT: Before deploying to production, generate migrations:
-    ///     dotnet ef migrations add InitialCreate -p GameService.ServiceDefaults -s GameService.ApiService
-    /// </summary>
     public static async Task InitializeAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();

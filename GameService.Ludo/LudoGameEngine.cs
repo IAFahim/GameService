@@ -11,8 +11,7 @@ public static class LudoActions
 {
     public const string Roll = "roll";
     public const string Move = "move";
-    
-    // Cached formatted move actions for legal moves response
+
     public static readonly string[] MoveActions = 
     [
         $"{Move}:0", 

@@ -12,13 +12,7 @@ using StackExchange.Redis;
 
 namespace GameService.ApiService.Hubs;
 
-/// <summary>
-///     Unified game hub - handles ALL game types through a single SignalR endpoint.
-///     Clients connect once and can interact with any game type.
-///     Includes chat functionality, spectator mode, and reconnection grace period handling.
-///     All state is stored in Redis for horizontal scaling.
-///     Uses strongly typed IGameClient interface for compile-time safety.
-/// </summary>
+
 [Authorize]
 public class GameHub(
     IRoomRegistry roomRegistry,
@@ -35,19 +29,13 @@ public class GameHub(
     private string UserId => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
     private string UserName => Context.User?.Identity?.Name ?? "Unknown";
 
-    /// <summary>
-    ///     Checks if a command has already been processed (idempotency)
-    /// </summary>
     private async Task<bool> IsCommandProcessedAsync(string roomId, string commandId)
     {
         if (string.IsNullOrEmpty(commandId)) return false;
         var key = $"cmd:{roomId}:{commandId}";
         return await _redisDb.KeyExistsAsync(key);
     }
-
-    /// <summary>
-    ///     Marks a command as processed (with 5 minute TTL)
-    /// </summary>
+    
     private async Task MarkCommandProcessedAsync(string roomId, string commandId)
     {
         if (string.IsNullOrEmpty(commandId)) return;
@@ -169,9 +157,7 @@ public class GameHub(
         await base.OnDisconnectedAsync(exception);
     }
 
-    /// <summary>
-    ///     Send a chat message to all players in a room
-    /// </summary>
+    
     public async Task SendChatMessage(string roomId, string message)
     {
         if (string.IsNullOrWhiteSpace(message) || message.Length > 500)
@@ -193,10 +179,6 @@ public class GameHub(
         logger.LogDebug("Chat in {RoomId}: {UserName}: {Message}", roomId, UserName, message);
     }
 
-    /// <summary>
-    ///     Create a new game room based on a predefined Template (Room Type).
-    /// </summary>
-    /// <param name="templateName">The unique name of the room template (e.g., "StandardLudo", "99Mines")</param>
     public async Task<CreateRoomResponse> CreateRoom(string templateName)
     {
         using var scope = serviceProvider.CreateScope();
@@ -269,9 +251,6 @@ public class GameHub(
         }
     }
 
-    /// <summary>
-    ///     Join an existing game room using its Short ID.
-    /// </summary>
     public async Task<JoinRoomResponse> JoinRoom(string roomId)
     {
         var gameType = await roomRegistry.GetGameTypeAsync(roomId);
@@ -343,9 +322,6 @@ public class GameHub(
         return new JoinRoomResponse(true, result.SeatIndex, null);
     }
 
-    /// <summary>
-    ///     Leave a game room
-    /// </summary>
     public async Task LeaveRoom(string roomId)
     {
         var gameType = await roomRegistry.GetGameTypeAsync(roomId);
@@ -363,17 +339,11 @@ public class GameHub(
         logger.LogInformation("Player {UserId} left room {RoomId}", UserId, roomId);
     }
 
-    /// <summary>
-    ///     Execute a game action (Roll, Move, Bet, Draw, etc.)
-    ///     This is the universal action handler for ALL game types.
-    ///     Supports idempotency via optional commandId parameter.
-    /// </summary>
     public async Task<GameActionResult> PerformAction(string roomId, string actionName, JsonElement payload, string? commandId = null)
     {
         if (!await CheckRateLimitAsync())
             return GameActionResult.Error("Rate limit exceeded. Please slow down.");
 
-        // Idempotency check - prevent duplicate command execution
         if (!string.IsNullOrEmpty(commandId) && await IsCommandProcessedAsync(roomId, commandId))
         {
             logger.LogDebug("Duplicate command {CommandId} for room {RoomId} ignored", commandId, roomId);
@@ -407,7 +377,6 @@ public class GameHub(
             if (result.Success)
             {
                 await roomRegistry.UpdateRoomActivityAsync(roomId, gameType);
-                // Mark command as processed for idempotency
                 await MarkCommandProcessedAsync(roomId, commandId ?? "");
             }
 
@@ -456,9 +425,6 @@ public class GameHub(
         }
     }
 
-    /// <summary>
-    ///     Get current game state manually
-    /// </summary>
     public async Task<GameStateResponse?> GetState(string roomId)
     {
         var gameType = await roomRegistry.GetGameTypeAsync(roomId);
@@ -468,9 +434,6 @@ public class GameHub(
         return engine != null ? await engine.GetStateAsync(roomId) : null;
     }
 
-    /// <summary>
-    ///     Get legal actions for current player (User Assistance)
-    /// </summary>
     public async Task<IReadOnlyList<string>> GetLegalActions(string roomId)
     {
         var gameType = await roomRegistry.GetGameTypeAsync(roomId);
@@ -480,10 +443,6 @@ public class GameHub(
         return engine != null ? await engine.GetLegalActionsAsync(roomId, UserId) : [];
     }
 
-    /// <summary>
-    ///     Spectate a game room without taking a seat.
-    ///     Spectators receive all GameState updates but cannot perform actions.
-    /// </summary>
     public async Task<SpectateRoomResponse> SpectateRoom(string roomId)
     {
         var gameType = await roomRegistry.GetGameTypeAsync(roomId);
@@ -492,15 +451,12 @@ public class GameHub(
         var engine = serviceProvider.GetKeyedService<IGameEngine>(gameType);
         if (engine == null) return new SpectateRoomResponse(false, "Game engine not available");
 
-        // Add to spectators group (separate from player group)
         var spectatorGroup = $"{roomId}:spectators";
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
         await Groups.AddToGroupAsync(Context.ConnectionId, spectatorGroup);
 
-        // Track spectator in Redis
         await _redisDb.SetAddAsync($"spectators:{roomId}", UserId);
 
-        // Send current game state
         var state = await engine.GetStateAsync(roomId);
         if (state != null) await Clients.Caller.GameState(state);
 
@@ -508,24 +464,17 @@ public class GameHub(
         return new SpectateRoomResponse(true, null);
     }
 
-    /// <summary>
-    ///     Stop spectating a room
-    /// </summary>
     public async Task StopSpectating(string roomId)
     {
         var spectatorGroup = $"{roomId}:spectators";
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, spectatorGroup);
 
-        // Remove from spectator tracking
         await _redisDb.SetRemoveAsync($"spectators:{roomId}", UserId);
 
         logger.LogInformation("Player {UserId} stopped spectating room {RoomId}", UserId, roomId);
     }
 
-    /// <summary>
-    ///     Get the count of spectators in a room
-    /// </summary>
     public async Task<long> GetSpectatorCount(string roomId)
     {
         return await _redisDb.SetLengthAsync($"spectators:{roomId}");
@@ -538,7 +487,6 @@ public sealed record JoinRoomResponse(bool Success, int SeatIndex, string? Error
 
 public sealed record SpectateRoomResponse(bool Success, string? ErrorMessage);
 
-// Legacy event records (kept for backwards compatibility, use IGameClient payloads for new code)
 public sealed record PlayerJoinedEvent(string UserId, string UserName, int SeatIndex);
 
 public sealed record PlayerLeftEvent(string UserId, string UserName);
@@ -551,9 +499,6 @@ public sealed record PlayerReconnectedEvent(string UserId, string UserName);
 
 public sealed record ChatMessageEvent(string UserId, string UserName, string Message, DateTimeOffset Timestamp);
 
-/// <summary>
-///     Payload for GameEnded outbox messages - ensures reliable payout processing
-/// </summary>
 public sealed record GameEndedPayload(
     string RoomId,
     string GameType,

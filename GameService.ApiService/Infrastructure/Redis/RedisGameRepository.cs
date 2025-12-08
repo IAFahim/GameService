@@ -5,36 +5,14 @@ using StackExchange.Redis;
 
 namespace GameService.ApiService.Infrastructure.Redis;
 
-/// <summary>
-///     Migration strategy interface for handling struct layout changes between deployments.
-///     Implement per-game-type migrations when struct fields change.
-/// </summary>
 public interface IStateMigration<TState> where TState : struct
 {
-    /// <summary>
-    ///     Source version this migration handles (migrates FROM this version)
-    /// </summary>
-    byte FromVersion { get; }
-
-    /// <summary>
-    ///     Target version this migration produces (migrates TO this version)
-    /// </summary>
+   byte FromVersion { get; }
     byte ToVersion { get; }
-
-    /// <summary>
-    ///     Expected size of the source struct in bytes
-    /// </summary>
     int FromSize { get; }
-
-    /// <summary>
-    ///     Migrate from old bytes to new state. Returns true if migration succeeded.
-    /// </summary>
     bool TryMigrate(ReadOnlySpan<byte> oldData, out TState newState);
 }
 
-/// <summary>
-///     Registry for state migrations. Games register migrations at startup.
-/// </summary>
 public interface IStateMigrationRegistry
 {
     void Register<TState>(IStateMigration<TState> migration) where TState : struct;
@@ -118,11 +96,9 @@ public sealed class RedisGameRepository<TState>(
     {
         if (roomIds.Count == 0) return [];
 
-        // Build all keys for MGET - interleave state and meta keys
         var stateKeys = roomIds.Select(StateKey).ToArray();
         var metaKeys = roomIds.Select(MetaKey).ToArray();
-        
-        // Use MGET for single-roundtrip batch fetch
+
         var stateValues = await _db.StringGetAsync(stateKeys.Select(k => (RedisKey)k).ToArray());
         var metaValues = await _db.StringGetAsync(metaKeys.Select(k => (RedisKey)k).ToArray());
 
@@ -204,19 +180,16 @@ public sealed class RedisGameRepository<TState>(
 
     private string StateKey(string roomId)
     {
-        // Shard by roomId to distribute across Redis cluster nodes
         return $"game:{gameType}:{{{roomId}}}:state";
     }
 
     private string MetaKey(string roomId)
     {
-        // Shard by roomId to distribute across Redis cluster nodes
         return $"game:{gameType}:{{{roomId}}}:meta";
     }
 
     private string LockKey(string roomId)
     {
-        // Shard by roomId to distribute across Redis cluster nodes
         return $"game:{gameType}:{{{roomId}}}:lock";
     }
 

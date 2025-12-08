@@ -30,10 +30,8 @@ public sealed class TokenRevocationMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Only check authenticated requests with JWT
         if (context.User.Identity?.IsAuthenticated == true)
         {
-            // Look for jti claim (standard JWT claim for token ID)
             var jti = context.User.FindFirstValue("jti");
             
             if (!string.IsNullOrEmpty(jti))
@@ -97,7 +95,6 @@ public sealed class RedisTokenRevocationService : ITokenRevocationService
         if (string.IsNullOrEmpty(jti)) return;
 
         var key = $"{TokenBlacklistPrefix}{jti}";
-        // Default TTL of 24 hours if not specified
         var expiry = ttl ?? TimeSpan.FromHours(24);
         
         await _db.StringSetAsync(key, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), expiry);
@@ -110,9 +107,7 @@ public sealed class RedisTokenRevocationService : ITokenRevocationService
 
         var key = $"{UserRevocationPrefix}{userId}";
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        
-        // Store the timestamp when all tokens were revoked
-        // Any token issued before this time should be rejected
+
         await _db.StringSetAsync(key, timestamp.ToString(), TimeSpan.FromDays(7));
         _logger.LogInformation("All tokens revoked for user {UserId} at {Timestamp}", userId, timestamp);
     }

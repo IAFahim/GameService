@@ -5,10 +5,6 @@ using Microsoft.Extensions.Options;
 
 namespace GameService.ApiService.Infrastructure.Workers;
 
-/// <summary>
-///     Background worker that cleans up old idempotency keys from WalletTransactions.
-///     Runs once per hour to remove keys older than configured retention period.
-/// </summary>
 public sealed class IdempotencyCleanupWorker(
     IServiceProvider serviceProvider,
     IOptions<GameServiceOptions> options,

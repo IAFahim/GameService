@@ -20,8 +20,6 @@ public class PlayerService(GameDbContext db, IRoomRegistry roomRegistry) : IPlay
 
         if (profile is null) return null;
 
-        // QoL: Check Redis for active session immediately
-        // This allows the UI to show a "Rejoin Game" button instantly
         var activeRoomId = await roomRegistry.GetUserRoomAsync(userId);
         string? gameType = null;
 

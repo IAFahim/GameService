@@ -6,10 +6,6 @@ namespace GameService.ApiService.Features.Games;
 
 public interface IGameArchivalService
 {
-    /// <summary>
-    ///     Archive a completed game and process payouts to winners.
-    ///     This handles the complete end-of-game flow: payouts + archival.
-    /// </summary>
     Task<GameEndResult> EndGameAsync(
         string roomId,
         string gameType,
@@ -20,9 +16,7 @@ public interface IGameArchivalService
         DateTimeOffset startedAt,
         IReadOnlyList<string>? winnerRanking = null);
 
-    /// <summary>
-    ///     Archive game without payouts (e.g., for cancelled games that already processed refunds)
-    /// </summary>
+
     Task ArchiveGameAsync(
         string roomId,
         string gameType,

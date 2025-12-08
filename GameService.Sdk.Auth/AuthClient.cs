@@ -42,10 +42,6 @@ public sealed class AuthClient : IDisposable
         };
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🔐 AUTHENTICATION
-    // ═══════════════════════════════════════════════════════════════
-
     /// <summary>
     /// 📝 Register a new account
     /// </summary>
@@ -130,10 +126,6 @@ public sealed class AuthClient : IDisposable
             ? new RefreshResult(true, tokens.AccessToken, tokens.RefreshToken, null)
             : new RefreshResult(false, null, null, "Invalid response");
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 👤 PLAYER INFO (requires authentication)
-    // ═══════════════════════════════════════════════════════════════
 
     /// <summary>
     /// 👤 Get current player's profile
@@ -231,7 +223,6 @@ public sealed class GameSession
             _baseUrl, 
             async () => 
             {
-                // In a real app, check expiration and refresh if needed
                 return AccessToken;
             }, 
             cancellationToken);
@@ -263,10 +254,6 @@ public sealed class GameSession
     public Task<long?> GetBalanceAsync() => _authClient.GetBalanceAsync(AccessToken);
 }
 
-// ═══════════════════════════════════════════════════════════════
-// 📦 TYPES
-// ═══════════════════════════════════════════════════════════════
-
 /// <summary>Registration result</summary>
 public sealed record RegisterResult(bool Success, string? Error);
 
@@ -292,7 +279,6 @@ public sealed class PlayerProfile
     public long Coins { get; set; }
 }
 
-// Internal request/response types
 internal sealed record RegisterRequest(string Email, string Password);
 internal sealed record LoginRequest(string Email, string Password);
 internal sealed record RefreshRequest(string RefreshToken);

@@ -12,16 +12,13 @@ public static class GameCatalogEndpoints
         app.MapGet("/games/supported", GetSupportedGames)
             .WithName("GetSupportedGames");
 
-        // QoL: Public lobby endpoint for players to browse open rooms
         app.MapGet("/games/lobby", GetPublicLobby)
             .RequireAuthorization()
             .WithName("GetPublicLobby");
 
-        // QoL: Server time synchronization for turn timers
         app.MapGet("/time", () => Results.Ok(new { ServerTime = DateTimeOffset.UtcNow }))
             .WithName("GetServerTime");
 
-        // QoL: Quick Match / Matchmaking
         app.MapPost("/games/quick-match", QuickMatch)
             .RequireAuthorization()
             .WithName("QuickMatch");
@@ -40,7 +37,6 @@ public static class GameCatalogEndpoints
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        // Filter by game type is mandatory for performance in Redis
         if (string.IsNullOrEmpty(gameType))
             return Results.BadRequest("GameType is required");
 
@@ -55,7 +51,6 @@ public static class GameCatalogEndpoints
 
         var states = await engine.GetManyStatesAsync(roomIds.ToList());
 
-        // Filter: Must be public and have empty seats
         var lobby = states
             .Where(s => s.Meta.IsPublic && s.Meta.CurrentPlayerCount < s.Meta.MaxPlayers)
             .Select(s => new GameRoomDto(
@@ -80,7 +75,6 @@ public static class GameCatalogEndpoints
         var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-        // 1. Try to find an existing public room with space
         var (roomIds, _) = await registry.GetRoomIdsPagedAsync(req.GameType, 0, 50);
         var engine = sp.GetKeyedService<IGameEngine>(req.GameType);
 
@@ -88,7 +82,6 @@ public static class GameCatalogEndpoints
         {
             var states = await engine.GetManyStatesAsync(roomIds.ToList());
 
-            // Find a room that is public, active, and has space
             var bestMatch = states.FirstOrDefault(s =>
                 s.Meta.IsPublic &&
                 s.Meta.CurrentPlayerCount < s.Meta.MaxPlayers);
@@ -99,7 +92,6 @@ public static class GameCatalogEndpoints
             }
         }
 
-        // 2. If no room found, create a new one
         var roomService = sp.GetKeyedService<IGameRoomService>(req.GameType);
         if (roomService == null)
             return Results.BadRequest("Unsupported game type");
@@ -115,7 +107,6 @@ public static class GameCatalogEndpoints
 
         var newRoomId = await roomService.CreateRoomAsync(meta);
 
-        // Auto-register user to room in registry so they "own" the seat immediately
         await registry.SetUserRoomAsync(userId, newRoomId);
 
         return Results.Ok(new QuickMatchResponse(newRoomId, "Created"));

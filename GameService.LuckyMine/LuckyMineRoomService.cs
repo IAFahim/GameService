@@ -110,7 +110,6 @@ public sealed class LuckyMineRoomService(
         Span<int> indices = stackalloc int[totalTiles];
         for (var i = 0; i < totalTiles; i++) indices[i] = i;
 
-        // Use cryptographically secure RNG for money games
         for (var i = 0; i < mineCount; i++)
         {
             var j = RandomNumberGenerator.GetInt32(i, totalTiles);

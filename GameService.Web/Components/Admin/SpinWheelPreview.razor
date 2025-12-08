@@ -1,0 +1,58 @@
+@using GameService.Web.Services
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="spin-wheel-preview" style="display: flex; justify-content: center; margin: 20px;">
+    <svg viewBox="-100 -100 200 200" width="300" height="300">
+        @if (Segments != null && Segments.Any())
+        {
+            double startAngle = 0;
+            double totalWeight = Segments.Sum(s => s.Weight);
+            if (totalWeight == 0) totalWeight = 1;
+
+            foreach (var segment in Segments)
+            {
+                double sliceAngle = (segment.Weight / totalWeight) * 360;
+                double endAngle = startAngle + sliceAngle;
+
+                // Convert to radians
+                double startRad = (startAngle - 90) * Math.PI / 180.0;
+                double endRad = (endAngle - 90) * Math.PI / 180.0;
+
+                var x1 = 100 * Math.Cos(startRad);
+                var y1 = 100 * Math.Sin(startRad);
+                var x2 = 100 * Math.Cos(endRad);
+                var y2 = 100 * Math.Sin(endRad);
+
+                var largeArc = sliceAngle > 180 ? 1 : 0;
+
+                <path d="M0,0 L@x1,@y1 A100,100 0 @largeArc,1 @x2,@y2 Z" fill="@segment.Color" stroke="#fff" stroke-width="2" />
+                
+                // Text label
+                double midAngle = startAngle + sliceAngle / 2;
+                double midRad = (midAngle - 90) * Math.PI / 180.0;
+                var tx = 60 * Math.Cos(midRad);
+                var ty = 60 * Math.Sin(midRad);
+                
+                <g transform="rotate(@(midAngle), @tx, @ty)">
+                    <text x="@tx" y="@ty" text-anchor="middle" dominant-baseline="middle" fill="#000" font-size="12" font-weight="bold" 
+                          style="text-shadow: 1px 1px 1px rgba(255,255,255,0.8);">
+                        @segment.Label
+                    </text>
+                </g>
+
+                startAngle = endAngle;
+            }
+        }
+        else
+        {
+            <circle cx="0" cy="0" r="100" fill="#ccc" />
+            <g>
+                <text x="0" y="0" text-anchor="middle" dominant-baseline="middle">No Segments</text>
+            </g>
+        }
+    </svg>
+</div>
+
+@code {
+    [Parameter] public List<SpinWheelSegment> Segments { get; set; } = new();
+}

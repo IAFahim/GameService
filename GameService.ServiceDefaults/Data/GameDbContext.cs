@@ -28,10 +28,18 @@ public class GameDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ArchivedGame> ArchivedGames => Set<ArchivedGame>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<GameStateSnapshot> GameStateSnapshots => Set<GameStateSnapshot>();
+    public DbSet<PlayerGameProgression> PlayerGameProgressions => Set<PlayerGameProgression>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<PlayerGameProgression>(b =>
+        {
+            b.HasIndex(p => p.UserId);
+            b.HasIndex(p => p.GameType);
+            b.HasIndex(p => new { p.UserId, p.GameType }).IsUnique();
+        });
 
         builder.Entity<ApplicationUser>(b =>
         {
@@ -303,4 +311,21 @@ public class GameStateSnapshot
     public required string MetaJson { get; set; }
 
     public DateTimeOffset SnapshotAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public class PlayerGameProgression
+{
+    public int Id { get; set; }
+
+    [MaxLength(450)]
+    public required string UserId { get; set; }
+
+    [MaxLength(50)]
+    public required string GameType { get; set; }
+
+    public int DailyLoginStreak { get; set; }
+
+    public DateTimeOffset LastDailyLogin { get; set; }
+
+    public bool HasClaimedWelcomeBonus { get; set; }
 }

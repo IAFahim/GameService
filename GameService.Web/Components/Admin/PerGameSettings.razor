@@ -1,0 +1,57 @@
+@using GameService.Web.Services
+@using GameService.ServiceDefaults.DTOs
+@inject GameAdminService AdminService
+
+<div class="card">
+    <div class="card-header">
+        <h2>Per-Game Economy Settings</h2>
+    </div>
+    <div class="card-body">
+        <ul class="nav nav-tabs" id="gameTabs" role="tablist">
+            @foreach (var game in SupportedGames)
+            {
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link @(SelectedGame == game.Type ? "active" : "")" 
+                            id="tab-@game.Type" 
+                            data-bs-toggle="tab" 
+                            data-bs-target="#content-@game.Type" 
+                            type="button" 
+                            role="tab"
+                            @onclick="() => SelectGame(game.Type)">
+                        @game.Name
+                    </button>
+                </li>
+            }
+        </ul>
+        <div class="tab-content p-3 border border-top-0" id="gameTabsContent">
+            @foreach (var game in SupportedGames)
+            {
+                <div class="tab-pane fade @(SelectedGame == game.Type ? "show active" : "")" id="content-@game.Type" role="tabpanel">
+                    @if (SelectedGame == game.Type)
+                    {
+                        <GameEconomyEditor GameType="@game.Type" />
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<SupportedGameDto> SupportedGames { get; set; } = new();
+    private string SelectedGame { get; set; } = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        SupportedGames = await AdminService.GetSupportedGamesAsync();
+        if (SupportedGames.Any())
+        {
+            SelectedGame = SupportedGames.First().Type;
+        }
+    }
+
+    private void SelectGame(string gameType)
+    {
+        SelectedGame = gameType;
+    }
+}

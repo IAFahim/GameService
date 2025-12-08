@@ -160,4 +160,92 @@ public class GameAdminService(HttpClient http)
             return null;
         }
     }
+
+    public async Task SaveGameEconomyConfigAsync(string gameType, GameEconomyConfig config)
+    {
+        var json = JsonSerializer.Serialize(config);
+        await UpdateSettingAsync($"Game:{gameType}:Economy", json);
+    }
+
+    public async Task SaveDailyRewardsConfigAsync(string gameType, DailyRewardsWrapper config)
+    {
+        var json = JsonSerializer.Serialize(config);
+        await UpdateSettingAsync($"Game:{gameType}:DailyRewards", json);
+    }
+
+    public async Task SaveSpinWheelConfigAsync(string gameType, SpinWheelConfig config)
+    {
+        var json = JsonSerializer.Serialize(config);
+        await UpdateSettingAsync($"Game:{gameType}:SpinWheel", json);
+    }
+
+    public async Task<GameEconomyConfig> GetGameEconomyConfigAsync(string gameType)
+    {
+        var settings = await GetSettingsAsync();
+        var setting = settings.FirstOrDefault(s => s.Key == $"Game:{gameType}:Economy");
+        if (setting != null && !string.IsNullOrEmpty(setting.Value))
+        {
+            try { return JsonSerializer.Deserialize<GameEconomyConfig>(setting.Value) ?? new(); } catch {}
+        }
+        return new GameEconomyConfig();
+    }
+
+    public async Task<DailyRewardsWrapper> GetDailyRewardsConfigAsync(string gameType)
+    {
+        var settings = await GetSettingsAsync();
+        var setting = settings.FirstOrDefault(s => s.Key == $"Game:{gameType}:DailyRewards");
+        if (setting != null && !string.IsNullOrEmpty(setting.Value))
+        {
+            try { return JsonSerializer.Deserialize<DailyRewardsWrapper>(setting.Value) ?? new(); } catch {}
+        }
+        return new DailyRewardsWrapper();
+    }
+
+    public async Task<SpinWheelConfig> GetSpinWheelConfigAsync(string gameType)
+    {
+        var settings = await GetSettingsAsync();
+        var setting = settings.FirstOrDefault(s => s.Key == $"Game:{gameType}:SpinWheel");
+        if (setting != null && !string.IsNullOrEmpty(setting.Value))
+        {
+            try { return JsonSerializer.Deserialize<SpinWheelConfig>(setting.Value) ?? new(); } catch {}
+        }
+        return new SpinWheelConfig();
+    }
+}
+
+public class DailyRewardConfig
+{
+    public int Day { get; set; }
+    public long Amount { get; set; }
+    public string Type { get; set; } = "Coin";
+    public bool IsJackpot { get; set; }
+}
+
+public class DailyRewardsWrapper
+{
+    public bool Enabled { get; set; }
+    public List<DailyRewardConfig> Rewards { get; set; } = new();
+}
+
+public class SpinWheelSegment
+{
+    public int Id { get; set; }
+    public string Label { get; set; } = "";
+    public long Amount { get; set; }
+    public int Weight { get; set; }
+    public string Color { get; set; } = "#CCCCCC";
+}
+
+public class SpinWheelConfig
+{
+    public bool Enabled { get; set; }
+    public long CostPerSpin { get; set; }
+    public int FreeSpinsPerDay { get; set; }
+    public List<SpinWheelSegment> Segments { get; set; } = new();
+}
+
+public class GameEconomyConfig
+{
+    public long WelcomeBonus { get; set; }
+    public bool DailyEnabled { get; set; }
 }

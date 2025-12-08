@@ -11,19 +11,23 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\GameService.LuckyMine\GameService.LuckyMine.csproj"/>
-        <ProjectReference Include="..\GameService.Ludo\GameService.Ludo.csproj"/>
-        <ProjectReference Include="..\GameService.ServiceDefaults\GameService.ServiceDefaults.csproj"/>
-        <ProjectReference Include="..\GameService.GameCore\GameService.GameCore.csproj"/>
+        <ProjectReference Include="..\GameService.LuckyMine\GameService.LuckyMine.csproj" />
+        <ProjectReference Include="..\GameService.Ludo\GameService.Ludo.csproj" />
+        <ProjectReference Include="..\GameService.ServiceDefaults\GameService.ServiceDefaults.csproj" />
+        <ProjectReference Include="..\GameService.GameCore\GameService.GameCore.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0"/>
-        <PackageReference Include="Aspire.StackExchange.Redis.OutputCaching" Version="13.0.0"/>
-        <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.5.2"/>
-        <PackageReference Include="Aspire.StackExchange.Redis" Version="13.0.0"/>
-        <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.0"/>
-        <PackageReference Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1"/>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+        <PackageReference Include="Aspire.StackExchange.Redis.OutputCaching" Version="13.0.0" />
+        <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.5.2" />
+        <PackageReference Include="Aspire.StackExchange.Redis" Version="13.0.0" />
+        <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.0" />
+        <PackageReference Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+          <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
     </ItemGroup>
 
 </Project>

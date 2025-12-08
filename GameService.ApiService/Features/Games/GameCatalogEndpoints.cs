@@ -39,7 +39,7 @@ public static class GameCatalogEndpoints
 
     private static IResult GetSupportedGames(IEnumerable<IGameModule> modules)
     {
-        var games = modules.Select(m => new SupportedGameDto(m.GameName)).ToList();
+        var games = modules.Select(m => new SupportedGameDto(m.GameName, m.GameName)).ToList();
         return Results.Ok(games);
     }
 

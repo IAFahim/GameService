@@ -22,7 +22,7 @@ public record PlayerUpdatedMessage(
     PlayerChangeType ChangeType = PlayerChangeType.Updated,
     int ProfileId = 0);
 
-public record SupportedGameDto(string Name);
+public record SupportedGameDto(string Name, string Type);
 
 public record GameTemplateDto(int Id, string Name, string GameType, int MaxPlayers, long EntryFee, string? ConfigJson);
 

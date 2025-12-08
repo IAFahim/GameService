@@ -19,6 +19,46 @@ public static class EconomyEndpoints
 
         group.MapPost("/daily-login", ClaimDailyLogin);
         group.MapPost("/daily-spin", ClaimDailySpin);
+
+        group.MapPost("/{gameType}/bonus/welcome", ClaimGameWelcomeBonus);
+        group.MapPost("/{gameType}/bonus/daily", ClaimGameDailyReward);
+        group.MapGet("/{gameType}/config/economy", GetGameEconomyConfig);
+    }
+
+    private static async Task<IResult> ClaimGameWelcomeBonus(
+        string gameType,
+        HttpContext ctx,
+        IEconomyService economy)
+    {
+        var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+        var result = await economy.ClaimGameWelcomeBonusAsync(userId, gameType);
+        if (!result.Success) return Results.BadRequest(result.ErrorMessage);
+
+        return Results.Ok(new { result.NewBalance });
+    }
+
+    private static async Task<IResult> ClaimGameDailyReward(
+        string gameType,
+        HttpContext ctx,
+        IEconomyService economy)
+    {
+        var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+        var result = await economy.ClaimGameDailyRewardAsync(userId, gameType);
+        if (!result.Success) return Results.BadRequest(result.ErrorMessage);
+
+        return Results.Ok(new { result.NewBalance });
+    }
+
+    private static async Task<IResult> GetGameEconomyConfig(
+        string gameType,
+        IEconomyService economy)
+    {
+        var config = await economy.GetGameEconomyConfigAsync(gameType);
+        return Results.Ok(config);
     }
 
     private static async Task<IResult> ClaimDailyLogin(

@@ -1,0 +1,177 @@
+@using GameService.Web.Services
+@inject GameAdminService AdminService
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h3>Economy Settings for @GameType</h3>
+    </div>
+    <div class="card-body">
+        <ul class="nav nav-tabs" id="economyTabs-@GameType" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="onboarding-tab-@GameType" data-bs-toggle="tab" data-bs-target="#onboarding-@GameType" type="button" role="tab">Onboarding</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="daily-tab-@GameType" data-bs-toggle="tab" data-bs-target="#daily-@GameType" type="button" role="tab">Daily Rewards</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="spin-tab-@GameType" data-bs-toggle="tab" data-bs-target="#spin-@GameType" type="button" role="tab">Spin Wheel</button>
+            </li>
+        </ul>
+        <div class="tab-content p-3 border border-top-0" id="economyTabsContent-@GameType">
+            <!-- Onboarding -->
+            <div class="tab-pane fade show active" id="onboarding-@GameType" role="tabpanel">
+                <div class="mb-3">
+                    <label class="form-label">Welcome Bonus (Coins)</label>
+                    <input type="number" class="form-control" @bind="EconomyConfig.WelcomeBonus" />
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" @bind="EconomyConfig.DailyEnabled" id="dailyEnabled-@GameType">
+                    <label class="form-check-label" for="dailyEnabled-@GameType">Enable Daily Rewards System</label>
+                </div>
+                <button class="btn btn-primary" @onclick="SaveEconomy">Save Onboarding</button>
+            </div>
+
+            <!-- Daily Rewards -->
+            <div class="tab-pane fade" id="daily-@GameType" role="tabpanel">
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" @bind="DailyConfig.Enabled" id="dailyRewardsEnabled-@GameType">
+                    <label class="form-check-label" for="dailyRewardsEnabled-@GameType">Enable Daily Rewards</label>
+                </div>
+                
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Amount</th>
+                            <th>Type</th>
+                            <th>Jackpot?</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var reward in DailyConfig.Rewards.OrderBy(r => r.Day))
+                        {
+                            <tr>
+                                <td><input type="number" class="form-control form-control-sm" @bind="reward.Day" /></td>
+                                <td><input type="number" class="form-control form-control-sm" @bind="reward.Amount" /></td>
+                                <td><input type="text" class="form-control form-control-sm" @bind="reward.Type" /></td>
+                                <td><input type="checkbox" class="form-check-input" @bind="reward.IsJackpot" /></td>
+                                <td><button class="btn btn-danger btn-sm" @onclick="() => RemoveDailyReward(reward)">Remove</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <button class="btn btn-secondary mb-3" @onclick="AddDailyReward">Add Day</button>
+                <br/>
+                <button class="btn btn-primary" @onclick="SaveDaily">Save Daily Rewards</button>
+            </div>
+
+            <!-- Spin Wheel -->
+            <div class="tab-pane fade" id="spin-@GameType" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" @bind="SpinConfig.Enabled" id="spinEnabled-@GameType">
+                            <label class="form-check-label" for="spinEnabled-@GameType">Enable Spin Wheel</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Cost Per Spin</label>
+                            <input type="number" class="form-control" @bind="SpinConfig.CostPerSpin" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Free Spins Per Day</label>
+                            <input type="number" class="form-control" @bind="SpinConfig.FreeSpinsPerDay" />
+                        </div>
+                        
+                        <h5>Segments</h5>
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Label</th>
+                                    <th>Amount</th>
+                                    <th>Weight</th>
+                                    <th>Color</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var seg in SpinConfig.Segments)
+                                {
+                                    <tr>
+                                        <td><input type="text" class="form-control form-control-sm" @bind="seg.Label" /></td>
+                                        <td><input type="number" class="form-control form-control-sm" @bind="seg.Amount" /></td>
+                                        <td><input type="number" class="form-control form-control-sm" @bind="seg.Weight" /></td>
+                                        <td><input type="color" class="form-control form-control-sm form-control-color" @bind="seg.Color" /></td>
+                                        <td><button class="btn btn-danger btn-sm" @onclick="() => RemoveSegment(seg)">X</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <button class="btn btn-secondary mb-3" @onclick="AddSegment">Add Segment</button>
+                        <br/>
+                        <button class="btn btn-primary" @onclick="SaveSpin">Save Spin Wheel</button>
+                    </div>
+                    <div class="col-md-6">
+                        <SpinWheelPreview Segments="SpinConfig.Segments" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string GameType { get; set; } = "Ludo";
+
+    private GameEconomyConfig EconomyConfig { get; set; } = new();
+    private DailyRewardsWrapper DailyConfig { get; set; } = new();
+    private SpinWheelConfig SpinConfig { get; set; } = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        EconomyConfig = await AdminService.GetGameEconomyConfigAsync(GameType);
+        DailyConfig = await AdminService.GetDailyRewardsConfigAsync(GameType);
+        SpinConfig = await AdminService.GetSpinWheelConfigAsync(GameType);
+    }
+
+    private async Task SaveEconomy()
+    {
+        await AdminService.SaveGameEconomyConfigAsync(GameType, EconomyConfig);
+    }
+
+    private async Task SaveDaily()
+    {
+        await AdminService.SaveDailyRewardsConfigAsync(GameType, DailyConfig);
+    }
+
+    private async Task SaveSpin()
+    {
+        await AdminService.SaveSpinWheelConfigAsync(GameType, SpinConfig);
+    }
+
+    private void AddDailyReward()
+    {
+        var nextDay = DailyConfig.Rewards.Any() ? DailyConfig.Rewards.Max(r => r.Day) + 1 : 1;
+        DailyConfig.Rewards.Add(new DailyRewardConfig { Day = nextDay, Amount = 100 });
+    }
+
+    private void RemoveDailyReward(DailyRewardConfig reward)
+    {
+        DailyConfig.Rewards.Remove(reward);
+    }
+
+    private void AddSegment()
+    {
+        SpinConfig.Segments.Add(new SpinWheelSegment { Label = "100", Amount = 100, Weight = 10, Color = "#CCCCCC" });
+    }
+
+    private void RemoveSegment(SpinWheelSegment seg)
+    {
+        SpinConfig.Segments.Remove(seg);
+    }
+}

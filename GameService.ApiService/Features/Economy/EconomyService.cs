@@ -28,6 +28,10 @@ public interface IEconomyService
     Task<GamePayoutResult> ProcessGamePayoutsAsync(string roomId, string gameType, long totalPot,
         IReadOnlyDictionary<string, int> playerSeats, string? winnerUserId,
         IReadOnlyList<string>? winnerRanking = null);
+
+    Task<TransactionResult> ClaimGameWelcomeBonusAsync(string userId, string gameType);
+    Task<TransactionResult> ClaimGameDailyRewardAsync(string userId, string gameType);
+    Task<JsonElement> GetGameEconomyConfigAsync(string gameType);
 }
 
 public enum TransactionErrorType
@@ -376,5 +380,287 @@ public class EconomyService(
         for (var i = 0; i < paidPositions; i++) percentages[i] /= total;
 
         return percentages;
+    }
+
+    public async Task<TransactionResult> ClaimGameWelcomeBonusAsync(string userId, string gameType)
+    {
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+            try
+            {
+                var progression = await db.PlayerGameProgressions
+                    .FirstOrDefaultAsync(p => p.UserId == userId && p.GameType == gameType);
+
+                if (progression == null)
+                {
+                    progression = new PlayerGameProgression
+                    {
+                        UserId = userId,
+                        GameType = gameType,
+                        DailyLoginStreak = 0,
+                        LastDailyLogin = DateTimeOffset.MinValue,
+                        HasClaimedWelcomeBonus = false
+                    };
+                    db.PlayerGameProgressions.Add(progression);
+                }
+
+                if (progression.HasClaimedWelcomeBonus)
+                {
+                    return new TransactionResult(false, 0, TransactionErrorType.DuplicateTransaction, "Welcome bonus already claimed");
+                }
+
+                var configJson = await db.GlobalSettings
+                    .Where(s => s.Key == $"Game:{gameType}:Economy")
+                    .Select(s => s.Value)
+                    .FirstOrDefaultAsync();
+
+                long bonusAmount = 0;
+                if (!string.IsNullOrEmpty(configJson))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(configJson);
+                        if (doc.RootElement.TryGetProperty("WelcomeBonus", out var bonusProp))
+                        {
+                            bonusAmount = bonusProp.GetInt64();
+                        }
+                    }
+                    catch { /* ignore */ }
+                }
+
+                if (bonusAmount <= 0) bonusAmount = 100; // Default
+
+                progression.HasClaimedWelcomeBonus = true;
+
+                // Credit logic
+                var profile = await db.PlayerProfiles
+                    .FromSqlRaw("SELECT * FROM \"PlayerProfiles\" WHERE \"UserId\" = {0} AND \"IsDeleted\" = false FOR UPDATE", userId)
+                    .FirstOrDefaultAsync();
+
+                long newBalance;
+                if (profile != null)
+                {
+                    profile.Coins += bonusAmount;
+                    profile.Version = Guid.NewGuid();
+                    newBalance = profile.Coins;
+                }
+                else
+                {
+                    // Should not happen for existing user but handle it
+                    var user = await db.Users.FindAsync(userId);
+                    if (user == null) return new TransactionResult(false, 0, TransactionErrorType.Unknown, "User not found");
+                    
+                    newBalance = _initialCoins + bonusAmount;
+                    profile = new PlayerProfile { UserId = userId, Coins = newBalance, User = user };
+                    db.PlayerProfiles.Add(profile);
+                }
+
+                var ledgerEntry = new WalletTransaction
+                {
+                    UserId = userId,
+                    Amount = bonusAmount,
+                    BalanceAfter = newBalance,
+                    TransactionType = "Credit",
+                    Description = $"Welcome Bonus: {gameType}",
+                    ReferenceId = $"BONUS:{gameType}:WELCOME",
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+                db.WalletTransactions.Add(ledgerEntry);
+
+                var outboxMessage = new OutboxMessage
+                {
+                    EventType = "PlayerUpdated",
+                    Payload = JsonSerializer.Serialize(new PlayerUpdatedMessage(userId, newBalance, null, null)),
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+                db.OutboxMessages.Add(outboxMessage);
+
+                await db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _ = Task.Run(() => publisher.PublishPlayerUpdatedAsync(new PlayerUpdatedMessage(userId, newBalance, null, null)));
+
+                return new TransactionResult(true, newBalance);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                logger.LogError(ex, "Error claiming welcome bonus");
+                return new TransactionResult(false, 0, TransactionErrorType.Unknown, "Error claiming bonus");
+            }
+        });
+    }
+
+    public async Task<TransactionResult> ClaimGameDailyRewardAsync(string userId, string gameType)
+    {
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+            try
+            {
+                var progression = await db.PlayerGameProgressions
+                    .FirstOrDefaultAsync(p => p.UserId == userId && p.GameType == gameType);
+
+                if (progression == null)
+                {
+                    progression = new PlayerGameProgression
+                    {
+                        UserId = userId,
+                        GameType = gameType,
+                        DailyLoginStreak = 0,
+                        LastDailyLogin = DateTimeOffset.MinValue,
+                        HasClaimedWelcomeBonus = false
+                    };
+                    db.PlayerGameProgressions.Add(progression);
+                }
+
+                var now = DateTimeOffset.UtcNow;
+                var lastLogin = progression.LastDailyLogin;
+                var daysDiff = (now.Date - lastLogin.Date).Days;
+
+                if (daysDiff == 0)
+                {
+                    return new TransactionResult(false, 0, TransactionErrorType.DuplicateTransaction, "Daily reward already claimed today");
+                }
+
+                if (daysDiff == 1)
+                {
+                    progression.DailyLoginStreak++;
+                }
+                else
+                {
+                    progression.DailyLoginStreak = 1;
+                }
+
+                progression.LastDailyLogin = now;
+
+                // Fetch reward config
+                var rewardsJson = await db.GlobalSettings
+                    .Where(s => s.Key == $"Game:{gameType}:DailyRewards")
+                    .Select(s => s.Value)
+                    .FirstOrDefaultAsync();
+
+                long rewardAmount = 0;
+                if (!string.IsNullOrEmpty(rewardsJson))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(rewardsJson);
+                        if (doc.RootElement.TryGetProperty("Rewards", out var rewardsProp) && rewardsProp.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var reward in rewardsProp.EnumerateArray())
+                            {
+                                if (reward.TryGetProperty("Day", out var dayProp) && dayProp.GetInt32() == progression.DailyLoginStreak)
+                                {
+                                    if (reward.TryGetProperty("Amount", out var amountProp))
+                                    {
+                                        rewardAmount = amountProp.GetInt64();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { /* ignore */ }
+                }
+
+                if (rewardAmount <= 0) rewardAmount = 50; // Fallback
+
+                // Credit logic
+                var profile = await db.PlayerProfiles
+                    .FromSqlRaw("SELECT * FROM \"PlayerProfiles\" WHERE \"UserId\" = {0} AND \"IsDeleted\" = false FOR UPDATE", userId)
+                    .FirstOrDefaultAsync();
+
+                long newBalance;
+                if (profile != null)
+                {
+                    profile.Coins += rewardAmount;
+                    profile.Version = Guid.NewGuid();
+                    newBalance = profile.Coins;
+                }
+                else
+                {
+                    var user = await db.Users.FindAsync(userId);
+                    if (user == null) return new TransactionResult(false, 0, TransactionErrorType.Unknown, "User not found");
+                    
+                    newBalance = _initialCoins + rewardAmount;
+                    profile = new PlayerProfile { UserId = userId, Coins = newBalance, User = user };
+                    db.PlayerProfiles.Add(profile);
+                }
+
+                var ledgerEntry = new WalletTransaction
+                {
+                    UserId = userId,
+                    Amount = rewardAmount,
+                    BalanceAfter = newBalance,
+                    TransactionType = "Credit",
+                    Description = $"Daily Reward: {gameType} Day {progression.DailyLoginStreak}",
+                    ReferenceId = $"BONUS:{gameType}:DAILY:{now:yyyyMMdd}",
+                    CreatedAt = now
+                };
+                db.WalletTransactions.Add(ledgerEntry);
+
+                var outboxMessage = new OutboxMessage
+                {
+                    EventType = "PlayerUpdated",
+                    Payload = JsonSerializer.Serialize(new PlayerUpdatedMessage(userId, newBalance, null, null)),
+                    CreatedAt = now
+                };
+                db.OutboxMessages.Add(outboxMessage);
+
+                await db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _ = Task.Run(() => publisher.PublishPlayerUpdatedAsync(new PlayerUpdatedMessage(userId, newBalance, null, null)));
+
+                return new TransactionResult(true, newBalance);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                logger.LogError(ex, "Error claiming daily reward");
+                return new TransactionResult(false, 0, TransactionErrorType.Unknown, "Error claiming reward");
+            }
+        });
+    }
+
+    public async Task<JsonElement> GetGameEconomyConfigAsync(string gameType)
+    {
+        var economyJson = await db.GlobalSettings
+            .Where(s => s.Key == $"Game:{gameType}:Economy")
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+
+        var dailyRewardsJson = await db.GlobalSettings
+            .Where(s => s.Key == $"Game:{gameType}:DailyRewards")
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+
+        var spinWheelJson = await db.GlobalSettings
+            .Where(s => s.Key == $"Game:{gameType}:SpinWheel")
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+
+        var result = new Dictionary<string, object>();
+        
+        if (!string.IsNullOrEmpty(economyJson))
+        {
+            try { result["Economy"] = JsonDocument.Parse(economyJson).RootElement; } catch {}
+        }
+        
+        if (!string.IsNullOrEmpty(dailyRewardsJson))
+        {
+            try { result["DailyRewards"] = JsonDocument.Parse(dailyRewardsJson).RootElement; } catch {}
+        }
+
+        if (!string.IsNullOrEmpty(spinWheelJson))
+        {
+            try { result["SpinWheel"] = JsonDocument.Parse(spinWheelJson).RootElement; } catch {}
+        }
+
+        return JsonSerializer.SerializeToElement(result);
     }
 }

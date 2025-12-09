@@ -225,6 +225,7 @@ public sealed class LuckyMineEngine(
 
         for (var i = 0; i < state.RevealedSafeCount; i++)
         {
+            if (remaining <= 0) return 0; // Prevent division by zero
             multiplier *= (double)total / remaining;
             remaining--;
             total--;
@@ -235,6 +236,7 @@ public sealed class LuckyMineEngine(
 
     private long CalculateNextWinnings(ref LuckyMineState state)
     {
+        if (state.RevealedSafeCount >= state.TotalTiles - state.TotalMines) return 0;
         var tempState = state;
         tempState.RevealedSafeCount++;
         return CalculateWinnings(ref tempState);

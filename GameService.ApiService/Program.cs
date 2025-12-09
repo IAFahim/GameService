@@ -67,14 +67,19 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
     {
         if (builder.Environment.IsDevelopment())
-            policy.AllowAnyOrigin()
+        {
+            policy.SetIsOriginAllowed(origin => new Uri(origin).Host == "localhost")
                 .AllowAnyHeader()
-                .AllowAnyMethod();
+                .AllowAnyMethod()
+                .AllowCredentials();
+        }
         else
+        {
             policy.WithOrigins(gameServiceOptions.Cors.AllowedOrigins)
                 .AllowAnyHeader()
                 .AllowAnyMethod()
                 .AllowCredentials();
+        }
     });
 });
 
@@ -109,7 +114,8 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddIdentityApiEndpoints<ApplicationUser>()
     .AddRoles<IdentityRole>()
-    .AddEntityFrameworkStores<GameDbContext>();
+    .AddEntityFrameworkStores<GameDbContext>()
+    .AddUserValidator<SystemUserValidator>();
 
 builder.Services.Configure<IdentityOptions>(options =>
 {

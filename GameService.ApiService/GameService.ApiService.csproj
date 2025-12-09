@@ -19,7 +19,6 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
-        <PackageReference Include="Aspire.StackExchange.Redis.OutputCaching" Version="13.0.0" />
         <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.5.2" />
         <PackageReference Include="Aspire.StackExchange.Redis" Version="13.0.0" />
         <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.0" />

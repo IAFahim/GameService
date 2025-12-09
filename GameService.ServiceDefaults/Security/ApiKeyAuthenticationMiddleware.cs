@@ -51,7 +51,16 @@ public sealed class ApiKeyAuthenticationMiddleware
                 return;
             }
 
-            var providedKeyBytes = Encoding.UTF8.GetBytes(apiKey);
+            var keyByteCount = Encoding.UTF8.GetByteCount(apiKey);
+            if (keyByteCount > 256)
+            {
+                 _logger.LogWarning("API key too long");
+                 await _next(context);
+                 return;
+            }
+
+            Span<byte> providedKeyBytes = stackalloc byte[keyByteCount];
+            Encoding.UTF8.GetBytes(apiKey, providedKeyBytes);
 
             if (SecureCompare(providedKeyBytes, _configuredKeyBytes))
             {
@@ -88,15 +97,15 @@ public sealed class ApiKeyAuthenticationMiddleware
         await _next(context);
     }
 
-    private static bool SecureCompare(byte[] _providedKeyBytes, byte[] configuredKeyBytes)
+    private static bool SecureCompare(ReadOnlySpan<byte> providedKeyBytes, byte[] configuredKeyBytes)
     {
-        if (_providedKeyBytes.Length != configuredKeyBytes.Length)
+        if (providedKeyBytes.Length != configuredKeyBytes.Length)
         {
-            CryptographicOperations.FixedTimeEquals(_providedKeyBytes, _providedKeyBytes);
+            CryptographicOperations.FixedTimeEquals(providedKeyBytes, providedKeyBytes);
             return false;
         }
 
-        return CryptographicOperations.FixedTimeEquals(_providedKeyBytes, configuredKeyBytes);
+        return CryptographicOperations.FixedTimeEquals(providedKeyBytes, configuredKeyBytes);
     }
 }
 

@@ -20,10 +20,10 @@ public sealed class LudoRoomService : IGameRoomService
     public async Task<string> CreateRoomAsync(GameRoomMeta meta)
     {
         var roomId = GenerateId();
-        var engine = new LudoEngine(new ServerDiceRoller());
-        engine.InitNewGame(meta.MaxPlayers);
+        var state = new LudoState();
+        LudoEngine.InitNewGame(ref state, meta.MaxPlayers);
 
-        await _repository.SaveAsync(roomId, engine.State, meta);
+        await _repository.SaveAsync(roomId, state, meta);
         _logger.LogInformation("Created Ludo room {RoomId}", roomId);
         return roomId;
     }

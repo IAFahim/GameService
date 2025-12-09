@@ -40,7 +40,7 @@ public class GameHub(
     {
         if (string.IsNullOrEmpty(commandId)) return;
         var key = $"cmd:{roomId}:{commandId}";
-        await _redisDb.StringSetAsync(key, "1", TimeSpan.FromMinutes(5));
+        await _redisDb.StringSetAsync(key, "1", TimeSpan.FromHours(1));
     }
 
     private async Task<bool> CheckRateLimitAsync()
@@ -59,7 +59,7 @@ public class GameHub(
         var connectionCount = await roomRegistry.IncrementConnectionCountAsync(UserId);
         if (connectionCount > _maxConnectionsPerUser)
         {
-            await roomRegistry.DecrementConnectionCountAsync(UserId);
+            // Do NOT decrement here. Let OnDisconnected handle it to avoid race conditions
             logger.LogWarning("Connection limit exceeded for user {UserId}: {Count}/{Max}",
                 UserId, connectionCount, _maxConnectionsPerUser);
             Context.Abort();

@@ -526,24 +526,13 @@ public class EconomyService(
                     return new TransactionResult(false, 0, TransactionErrorType.DuplicateTransaction, "Daily reward already claimed today");
                 }
 
-                if (daysDiff == 1)
-                {
-                    progression.DailyLoginStreak++;
-                }
-                else
-                {
-                    progression.DailyLoginStreak = 1;
-                }
-
-                progression.LastDailyLogin = now;
-
                 // Fetch reward config
                 var rewardsJson = await db.GlobalSettings
                     .Where(s => s.Key == $"Game:{gameType}:DailyRewards")
                     .Select(s => s.Value)
                     .FirstOrDefaultAsync();
 
-                long rewardAmount = 0;
+                var rewardsMap = new Dictionary<int, long>();
                 if (!string.IsNullOrEmpty(rewardsJson))
                 {
                     try
@@ -553,13 +542,9 @@ public class EconomyService(
                         {
                             foreach (var reward in rewardsProp.EnumerateArray())
                             {
-                                if (reward.TryGetProperty("Day", out var dayProp) && dayProp.GetInt32() == progression.DailyLoginStreak)
+                                if (reward.TryGetProperty("Day", out var dayProp) && reward.TryGetProperty("Amount", out var amountProp))
                                 {
-                                    if (reward.TryGetProperty("Amount", out var amountProp))
-                                    {
-                                        rewardAmount = amountProp.GetInt64();
-                                        break;
-                                    }
+                                    rewardsMap[dayProp.GetInt32()] = amountProp.GetInt64();
                                 }
                             }
                         }
@@ -567,7 +552,21 @@ public class EconomyService(
                     catch { /* ignore */ }
                 }
 
-                if (rewardAmount <= 0) rewardAmount = 50; // Fallback
+                int maxDay = rewardsMap.Keys.Count > 0 ? rewardsMap.Keys.Max() : 7;
+
+                if (daysDiff == 1)
+                {
+                    progression.DailyLoginStreak++;
+                    if (progression.DailyLoginStreak > maxDay) progression.DailyLoginStreak = 1;
+                }
+                else
+                {
+                    progression.DailyLoginStreak = 1;
+                }
+
+                progression.LastDailyLogin = now;
+
+                long rewardAmount = rewardsMap.TryGetValue(progression.DailyLoginStreak, out var amt) ? amt : 50;
 
                 // Credit logic
                 var profile = await db.PlayerProfiles

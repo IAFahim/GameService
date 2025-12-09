@@ -211,6 +211,23 @@ public class GameAdminService(HttpClient http)
         }
         return new SpinWheelConfig();
     }
+
+    public async Task<GlobalEconomyConfig> GetGlobalEconomyConfigAsync()
+    {
+        try
+        {
+            return await http.GetFromJsonAsync<GlobalEconomyConfig>("/economy/config") ?? new GlobalEconomyConfig();
+        }
+        catch
+        {
+            return new GlobalEconomyConfig();
+        }
+    }
+}
+
+public class GlobalEconomyConfig
+{
+    public long InitialCoins { get; set; }
 }
 
 public class DailyRewardConfig

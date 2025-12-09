@@ -1,5 +1,6 @@
 @using GameService.Web.Services
 @inject GameAdminService AdminService
+@inject ToastService Toast
 
 <div class="card mt-3">
     <div class="card-header">
@@ -12,9 +13,6 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="daily-tab-@GameType" data-bs-toggle="tab" data-bs-target="#daily-@GameType" type="button" role="tab">Daily Rewards</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="spin-tab-@GameType" data-bs-toggle="tab" data-bs-target="#spin-@GameType" type="button" role="tab">Spin Wheel</button>
             </li>
         </ul>
         <div class="tab-content p-3 border border-top-0" id="economyTabsContent-@GameType">
@@ -65,57 +63,6 @@
                 <br/>
                 <button class="btn btn-primary" @onclick="SaveDaily">Save Daily Rewards</button>
             </div>
-
-            <!-- Spin Wheel -->
-            <div class="tab-pane fade" id="spin-@GameType" role="tabpanel">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" @bind="SpinConfig.Enabled" id="spinEnabled-@GameType">
-                            <label class="form-check-label" for="spinEnabled-@GameType">Enable Spin Wheel</label>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Cost Per Spin</label>
-                            <input type="number" class="form-control" @bind="SpinConfig.CostPerSpin" />
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Free Spins Per Day</label>
-                            <input type="number" class="form-control" @bind="SpinConfig.FreeSpinsPerDay" />
-                        </div>
-                        
-                        <h5>Segments</h5>
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Label</th>
-                                    <th>Amount</th>
-                                    <th>Weight</th>
-                                    <th>Color</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var seg in SpinConfig.Segments)
-                                {
-                                    <tr>
-                                        <td><input type="text" class="form-control form-control-sm" @bind="seg.Label" /></td>
-                                        <td><input type="number" class="form-control form-control-sm" @bind="seg.Amount" /></td>
-                                        <td><input type="number" class="form-control form-control-sm" @bind="seg.Weight" /></td>
-                                        <td><input type="color" class="form-control form-control-sm form-control-color" @bind="seg.Color" /></td>
-                                        <td><button class="btn btn-danger btn-sm" @onclick="() => RemoveSegment(seg)">X</button></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                        <button class="btn btn-secondary mb-3" @onclick="AddSegment">Add Segment</button>
-                        <br/>
-                        <button class="btn btn-primary" @onclick="SaveSpin">Save Spin Wheel</button>
-                    </div>
-                    <div class="col-md-6">
-                        <SpinWheelPreview Segments="SpinConfig.Segments" />
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </div>
@@ -125,7 +72,6 @@
 
     private GameEconomyConfig EconomyConfig { get; set; } = new();
     private DailyRewardsWrapper DailyConfig { get; set; } = new();
-    private SpinWheelConfig SpinConfig { get; set; } = new();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -136,7 +82,6 @@
     {
         EconomyConfig = await AdminService.GetGameEconomyConfigAsync(GameType);
         DailyConfig = await AdminService.GetDailyRewardsConfigAsync(GameType);
-        SpinConfig = await AdminService.GetSpinWheelConfigAsync(GameType);
     }
 
     private async Task SaveEconomy()
@@ -146,12 +91,17 @@
 
     private async Task SaveDaily()
     {
+        var days = DailyConfig.Rewards.Select(r => r.Day).OrderBy(d => d).ToList();
+        for (int i = 0; i < days.Count; i++)
+        {
+            if (days[i] != i + 1)
+            {
+                Toast.ShowError($"Missing Day {i + 1}. Days must be consecutive starting from 1.");
+                return;
+            }
+        }
         await AdminService.SaveDailyRewardsConfigAsync(GameType, DailyConfig);
-    }
-
-    private async Task SaveSpin()
-    {
-        await AdminService.SaveSpinWheelConfigAsync(GameType, SpinConfig);
+        Toast.ShowSuccess("Daily rewards saved");
     }
 
     private void AddDailyReward()
@@ -163,15 +113,5 @@
     private void RemoveDailyReward(DailyRewardConfig reward)
     {
         DailyConfig.Rewards.Remove(reward);
-    }
-
-    private void AddSegment()
-    {
-        SpinConfig.Segments.Add(new SpinWheelSegment { Label = "100", Amount = 100, Weight = 10, Color = "#CCCCCC" });
-    }
-
-    private void RemoveSegment(SpinWheelSegment seg)
-    {
-        SpinConfig.Segments.Remove(seg);
     }
 }

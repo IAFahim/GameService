@@ -19,7 +19,6 @@ builder.Services.Configure<GameServiceOptions>(builder.Configuration.GetSection(
 
 builder.Services.AddSingleton<PlayerUpdateNotifier>();
 builder.Services.AddScoped<ToastService>();
-builder.Services.AddScoped<SoundService>();
 builder.Services.AddHttpClient<GameAdminService>((sp, client) =>
 {
     client.BaseAddress = new Uri("http://apiservice");

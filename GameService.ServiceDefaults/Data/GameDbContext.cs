@@ -138,6 +138,16 @@ public class GameDbContext : IdentityDbContext<ApplicationUser>
             .Select(e => e.Entity)
             .ToList();
 
+        var initialCoinsSetting = await GlobalSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == "Economy:InitialCoins", cancellationToken);
+
+        long initialCoins = _initialCoins;
+        if (initialCoinsSetting != null && long.TryParse(initialCoinsSetting.Value, out var val))
+        {
+            initialCoins = val;
+        }
+
         foreach (var user in newUsers)
         {
             var hasProfile = ChangeTracker.Entries<PlayerProfile>()
@@ -148,7 +158,7 @@ public class GameDbContext : IdentityDbContext<ApplicationUser>
                 {
                     User = user,
                     UserId = user.Id,
-                    Coins = _initialCoins,
+                    Coins = initialCoins,
                     Version = Guid.NewGuid()
                 });
         }

@@ -88,27 +88,27 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
         var ctx = await _repository.LoadAsync(roomId);
         if (ctx == null) return null;
 
-        var engine = new LudoEngine(_diceRoller) { State = ctx.State };
-        if (engine.State.IsGameOver()) return null;
+        var state = ctx.State;
+        if (state.IsGameOver()) return null;
 
         var elapsed = DateTimeOffset.UtcNow - ctx.Meta.TurnStartedAt;
         if (elapsed.TotalSeconds < TurnTimeoutSeconds) return null;
 
-        _logger.LogInformation("Timeout in room {RoomId} for player {Player}", roomId, engine.State.CurrentPlayer);
+        _logger.LogInformation("Timeout in room {RoomId} for player {Player}", roomId, state.CurrentPlayer);
 
-        var events = new List<GameEvent> { new(LudoEvents.TurnTimeout, new { Player = engine.State.CurrentPlayer }) };
+        var events = new List<GameEvent> { new(LudoEvents.TurnTimeout, new { Player = state.CurrentPlayer }) };
 
-        if (engine.State.LastDiceRoll == 0)
-            if (engine.TryRollDice(out var res))
+        if (state.LastDiceRoll == 0)
+            if (LudoEngine.TryRollDice(ref state, _diceRoller, out var res))
                 events.Add(new GameEvent(LudoEvents.DiceRolled,
-                    new { Value = res.DiceValue, Player = engine.State.CurrentPlayer, AutoPlay = true }));
+                    new { Value = res.DiceValue, Player = state.CurrentPlayer, AutoPlay = true }));
 
-        int mask = engine.GetLegalMovesMask();
+        int mask = LudoEngine.GetLegalMovesMask(ref state);
         if (mask != 0)
         {
             var tokenToMove = (mask & 1) != 0 ? 0 : (mask & 2) != 0 ? 1 : (mask & 4) != 0 ? 2 : 3;
 
-            if (engine.TryMoveToken(tokenToMove, out var res))
+            if (LudoEngine.TryMoveToken(ref state, tokenToMove, out var res))
             {
                 events.Add(new GameEvent(LudoEvents.TokenMoved,
                     new
@@ -120,13 +120,13 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
             }
         }
 
-        if (engine.State.TurnId != ctx.State.TurnId || engine.State.CurrentPlayer != ctx.State.CurrentPlayer)
-            events.Add(new GameEvent(LudoEvents.TurnChanged, new { NewPlayer = engine.State.CurrentPlayer }));
+        if (state.TurnId != ctx.State.TurnId || state.CurrentPlayer != ctx.State.CurrentPlayer)
+            events.Add(new GameEvent(LudoEvents.TurnChanged, new { NewPlayer = state.CurrentPlayer }));
 
         var newMeta = ctx.Meta with { TurnStartedAt = DateTimeOffset.UtcNow };
-        await _repository.SaveAsync(roomId, engine.State, newMeta);
+        await _repository.SaveAsync(roomId, state, newMeta);
 
-        var finalState = engine.State;
+        var finalState = state;
         var response = new GameStateResponse
         {
             RoomId = roomId,
@@ -155,8 +155,8 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
 
         if (ctx.State.LastDiceRoll == 0) return CachedRollAction;
 
-        var engine = new LudoEngine(_diceRoller) { State = ctx.State };
-        int mask = engine.GetLegalMovesMask();
+        var state = ctx.State;
+        int mask = LudoEngine.GetLegalMovesMask(ref state);
 
         if (mask == 0) return EmptyActions;
 
@@ -213,7 +213,7 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
         if (ctx == null) return GameActionResult.Error("Room not found");
         if (!ValidateTurn(ctx, userId, out var seat)) return GameActionResult.Error("Not your turn");
 
-        var engine = new LudoEngine(_diceRoller) { State = ctx.State };
+        var state = ctx.State;
         
         byte? forcedDice = null;
         if (userId == GameCoreConstants.AdminUserId && payload.HasValue)
@@ -224,17 +224,17 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
             }
         }
 
-        if (!engine.TryRollDice(out var res, forcedDice)) return GameActionResult.Error($"Roll failed: {res.Status}");
+        if (!LudoEngine.TryRollDice(ref state, _diceRoller, out var res, forcedDice)) return GameActionResult.Error($"Roll failed: {res.Status}");
 
         var events = new List<GameEvent> { new(LudoEvents.DiceRolled, new { Value = res.DiceValue, Player = seat }) };
 
         if (res.Status.HasFlag(LudoStatus.TurnPassed) || res.Status.HasFlag(LudoStatus.ForfeitTurn))
-            events.Add(new GameEvent(LudoEvents.TurnChanged, new { NewPlayer = engine.State.CurrentPlayer }));
+            events.Add(new GameEvent(LudoEvents.TurnChanged, new { NewPlayer = state.CurrentPlayer }));
 
         var newMeta = ctx.Meta with { TurnStartedAt = DateTimeOffset.UtcNow };
-        await _repository.SaveAsync(roomId, engine.State, newMeta);
+        await _repository.SaveAsync(roomId, state, newMeta);
 
-        var finalState = engine.State;
+        var finalState = state;
         var response = new GameStateResponse
         {
             RoomId = roomId,
@@ -253,20 +253,20 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
         if (ctx == null) return GameActionResult.Error("Room not found");
         if (!ValidateTurn(ctx, userId, out var seat)) return GameActionResult.Error("Not your turn");
 
-        var engine = new LudoEngine(_diceRoller) { State = ctx.State };
-        if (!engine.TryMoveToken(tIdx, out var res)) return GameActionResult.Error($"Move failed: {res.Status}");
+        var state = ctx.State;
+        if (!LudoEngine.TryMoveToken(ref state, tIdx, out var res)) return GameActionResult.Error($"Move failed: {res.Status}");
 
         var events = new List<GameEvent>
             { new(LudoEvents.TokenMoved, new { Player = seat, TokenIndex = tIdx, NewPosition = res.NewPos }) };
         ProcessEvents(events, res, seat);
 
         if (!res.Status.HasFlag(LudoStatus.ExtraTurn) || res.Status.HasFlag(LudoStatus.ErrorGameEnded))
-            events.Add(new GameEvent(LudoEvents.TurnChanged, new { NewPlayer = engine.State.CurrentPlayer }));
+            events.Add(new GameEvent(LudoEvents.TurnChanged, new { NewPlayer = state.CurrentPlayer }));
 
         var newMeta = ctx.Meta with { TurnStartedAt = DateTimeOffset.UtcNow };
-        await _repository.SaveAsync(roomId, engine.State, newMeta);
+        await _repository.SaveAsync(roomId, state, newMeta);
 
-        var finalState = engine.State;
+        var finalState = state;
         var stateDto = MapToDto(ref finalState, newMeta);
         var response = new GameStateResponse
         {
@@ -345,8 +345,6 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
         var wPacked = s.Winners[0] | ((uint)s.Winners[1] << 8) | ((uint)s.Winners[2] << 16) |
                       ((uint)s.Winners[3] << 24);
 
-        var engine = new LudoEngine(_diceRoller) { State = s };
-
         return new LudoStateDto
         {
             CurrentPlayer = s.CurrentPlayer, LastDiceRoll = s.LastDiceRoll, TurnId = s.TurnId,
@@ -354,7 +352,7 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
             TurnTimeoutSeconds = TurnTimeoutSeconds,
             Tokens = tokens, ActiveSeatsMask = s.ActiveSeats, FinishedMask = s.FinishedMask, WinnersPacked = wPacked,
             IsGameOver = s.IsGameOver(),
-            LegalMovesMask = engine.GetLegalMovesMask()
+            LegalMovesMask = LudoEngine.GetLegalMovesMask(ref s)
         };
     }
 }

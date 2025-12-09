@@ -235,7 +235,8 @@
             isLoading = true;
             settings = await AdminService.GetSettingsAsync();
             
-            initialCoins = GetLong("Economy:InitialCoins", 100);
+            var globalConfig = await AdminService.GetGlobalEconomyConfigAsync();
+            initialCoins = globalConfig.InitialCoins;
             
             dailyLoginEnabled = GetBool("Economy:DailyLoginEnabled");
             dailyLoginReward = GetLong("Economy:DailyLoginReward", 100);

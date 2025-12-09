@@ -4,12 +4,18 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace GameService.ApiService.Infrastructure;
 
-public class HubGameBroadcaster(IHubContext<GameHub, IGameClient> hubContext) : IGameBroadcaster
+public class HubGameBroadcaster(IHubContext<GameHub, IGameClient> hubContext, ILogger<HubGameBroadcaster> logger) : IGameBroadcaster
 {
     public async Task BroadcastStateAsync(string roomId, object state)
     {
         if (state is GameStateResponse gameState)
+        {
             await hubContext.Clients.Group(roomId).GameState(gameState);
+        }
+        else
+        {
+            logger.LogWarning("BroadcastStateAsync received invalid state type {Type} for room {RoomId}", state?.GetType().Name, roomId);
+        }
     }
 
     public async Task BroadcastEventAsync(string roomId, GameEvent gameEvent)

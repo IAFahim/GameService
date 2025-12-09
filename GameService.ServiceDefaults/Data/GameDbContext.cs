@@ -138,14 +138,18 @@ public class GameDbContext : IdentityDbContext<ApplicationUser>
             .Select(e => e.Entity)
             .ToList();
 
-        var initialCoinsSetting = await GlobalSettings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Key == "Economy:InitialCoins", cancellationToken);
-
-        long initialCoins = _initialCoins;
-        if (initialCoinsSetting != null && long.TryParse(initialCoinsSetting.Value, out var val))
+        // FIX: Check DB setting for override before processing new users
+        long effectiveInitialCoins = _initialCoins;
+        if (newUsers.Count > 0)
         {
-            initialCoins = val;
+            var dbSetting = await GlobalSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Key == "Economy:InitialCoins", cancellationToken);
+            
+            if (dbSetting != null && long.TryParse(dbSetting.Value, out var val))
+            {
+                effectiveInitialCoins = val;
+            }
         }
 
         foreach (var user in newUsers)
@@ -154,13 +158,15 @@ public class GameDbContext : IdentityDbContext<ApplicationUser>
                 .Any(e => e.State == EntityState.Added && e.Entity.User == user);
 
             if (!hasProfile && user.Profile == null)
+            {
                 PlayerProfiles.Add(new PlayerProfile
                 {
                     User = user,
                     UserId = user.Id,
-                    Coins = initialCoins,
+                    Coins = effectiveInitialCoins, // FIX: Use the resolved value
                     Version = Guid.NewGuid()
                 });
+            }
         }
 
         var addedProfiles = new List<PlayerProfile>();

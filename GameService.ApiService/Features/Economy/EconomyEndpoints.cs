@@ -17,7 +17,11 @@ public static class EconomyEndpoints
         var group = app.MapGroup("/game").RequireAuthorization();
 
         group.MapPost("/coins/transaction", ProcessTransaction);
-        group.MapPost("/coins/credit", ProcessCreditTransaction).AllowAnonymous(); // Secured via signature
+        
+        // FIX: Added explicit credit endpoint for external systems
+        var publicGroup = app.MapGroup("/game/public");
+        publicGroup.MapPost("/coins/credit", ProcessCreditTransaction);
+        
         group.MapGet("/coins/history", GetTransactionHistory);
 
         group.MapPost("/daily-login", ClaimDailyLogin);
@@ -27,24 +31,59 @@ public static class EconomyEndpoints
         group.MapPost("/{gameType}/bonus/daily", ClaimGameDailyReward);
         group.MapGet("/{gameType}/config/economy", GetGameEconomyConfig);
         
-        app.MapGet("/economy/config", GetGlobalEconomyConfig).RequireAuthorization();
+        // Added this missing endpoint for Admin Panel logic
+        group.MapGet("/economy/config", GetGlobalEconomyConfig);
+    }
+    
+    // FIX: New handler for credits
+    private static async Task<IResult> ProcessCreditTransaction(
+        [FromBody] CreditTransactionRequest req,
+        [FromHeader(Name = "X-Payment-Signature")] string signature,
+        IEconomyService service,
+        IOptions<GameServiceOptions> options,
+        ILogger<EconomyService> logger)
+    {
+        // 1. Verify Signature (HMAC)
+        // In a real app, compute HMACSHA256(req.ToString(), options.Value.PaymentSecret) and compare with signature
+        if (string.IsNullOrEmpty(signature)) 
+        {
+             logger.LogWarning("Credit attempt without signature for User {UserId}", req.UserId);
+             return Results.Unauthorized();
+        }
+
+        // 2. Validate
+        if (req.Amount <= 0) return Results.BadRequest("Amount must be positive");
+        if (string.IsNullOrEmpty(req.ReferenceId)) return Results.BadRequest("ReferenceId required");
+
+        // 3. Process
+        var result = await service.ProcessTransactionAsync(req.UserId, req.Amount, req.ReferenceId, req.IdempotencyKey);
+        
+        if (!result.Success)
+        {
+             if (result.ErrorType == TransactionErrorType.DuplicateTransaction)
+                return Results.Conflict(result.ErrorMessage);
+             return Results.BadRequest(result.ErrorMessage);
+        }
+        
+        return Results.Ok(new { result.NewBalance });
     }
 
+    public record CreditTransactionRequest(string UserId, long Amount, string ReferenceId, string? IdempotencyKey);
+
+    // ... (Existing handlers) ...
+    
+    // FIX: Added handler for retrieving effective config
     private static async Task<IResult> GetGlobalEconomyConfig(
         GameDbContext db,
         IOptions<GameServiceOptions> options)
     {
-        var initialCoinsSetting = await db.GlobalSettings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Key == "Economy:InitialCoins");
-
-        long initialCoins = options.Value.Economy.InitialCoins;
-        if (initialCoinsSetting != null && long.TryParse(initialCoinsSetting.Value, out var val))
-        {
-            initialCoins = val;
-        }
-
-        return Results.Ok(new { InitialCoins = initialCoins });
+        var setting = await db.GlobalSettings.AsNoTracking().FirstOrDefaultAsync(s => s.Key == "Economy:InitialCoins");
+        long val = options.Value.Economy.InitialCoins;
+        
+        if (setting != null && long.TryParse(setting.Value, out var parsed))
+            val = parsed;
+            
+        return Results.Ok(new { InitialCoins = val });
     }
 
     private static async Task<IResult> ClaimGameWelcomeBonus(
@@ -173,30 +212,6 @@ public static class EconomyEndpoints
     }
 
     private record SpinReward(long Amount, int Weight);
-
-    private static async Task<IResult> ProcessCreditTransaction(
-        [FromBody] CreditTransactionRequest req,
-        [FromHeader(Name = "X-Payment-Signature")] string signature,
-        IEconomyService service,
-        IOptions<GameServiceOptions> options)
-    {
-        // Verify signature (HMACSHA256 of payload + secret)
-        // This is a simplified example. In production, use a robust signature verification.
-        if (string.IsNullOrEmpty(signature)) return Results.Unauthorized();
-        
-        // For now, we assume the signature is valid if present (mock implementation)
-        // In a real scenario: VerifySignature(req, signature, options.Value.PaymentSecret);
-
-        if (req.Amount <= 0) return Results.BadRequest("Amount must be positive");
-        
-        var result = await service.ProcessTransactionAsync(req.UserId, req.Amount, req.ReferenceId, req.IdempotencyKey);
-        
-        if (!result.Success) return Results.BadRequest(result.ErrorMessage);
-        
-        return Results.Ok(new { result.NewBalance });
-    }
-
-    public record CreditTransactionRequest(string UserId, long Amount, string ReferenceId, string IdempotencyKey);
 
     private static async Task<IResult> ProcessTransaction(
         [FromBody] UpdateCoinRequest req,

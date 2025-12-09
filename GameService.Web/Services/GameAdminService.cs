@@ -212,11 +212,13 @@ public class GameAdminService(HttpClient http)
         return new SpinWheelConfig();
     }
 
+    // FIX: Added method to fetch effective global economy config
     public async Task<GlobalEconomyConfig> GetGlobalEconomyConfigAsync()
     {
         try
         {
-            return await http.GetFromJsonAsync<GlobalEconomyConfig>("/economy/config") ?? new GlobalEconomyConfig();
+            return await http.GetFromJsonAsync<GlobalEconomyConfig>("/game/economy/config") 
+                   ?? new GlobalEconomyConfig();
         }
         catch
         {

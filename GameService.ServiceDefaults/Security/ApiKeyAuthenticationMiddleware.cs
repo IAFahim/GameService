@@ -45,8 +45,16 @@ public sealed class ApiKeyAuthenticationMiddleware
         {
             if (_configuredKeyBytes.Length == 0)
             {
+                // FIX: Fail closed in production if key is missing
                 if (!_environment.IsDevelopment())
-                    _logger.LogWarning("API key authentication attempted but no key is configured");
+                {
+                    _logger.LogCritical("API key authentication attempted but no key is configured on server.");
+                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    await context.Response.WriteAsync("Service authentication misconfigured.");
+                    return;
+                }
+                
+                _logger.LogWarning("API key authentication attempted but no key is configured (Dev Mode - Bypassing check)");
                 await _next(context);
                 return;
             }

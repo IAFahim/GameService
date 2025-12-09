@@ -552,16 +552,20 @@ public class EconomyService(
                     catch { /* ignore */ }
                 }
 
+                // FIX: Correctly determine max day and loop logic
                 int maxDay = rewardsMap.Keys.Count > 0 ? rewardsMap.Keys.Max() : 7;
 
                 if (daysDiff == 1)
                 {
                     progression.DailyLoginStreak++;
-                    if (progression.DailyLoginStreak > maxDay) progression.DailyLoginStreak = 1;
+                    if (progression.DailyLoginStreak > maxDay) 
+                    {
+                        progression.DailyLoginStreak = 1; // Loop back to day 1
+                    }
                 }
                 else
                 {
-                    progression.DailyLoginStreak = 1;
+                    progression.DailyLoginStreak = 1; // Reset to day 1 if missed a day
                 }
 
                 progression.LastDailyLogin = now;

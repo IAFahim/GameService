@@ -223,6 +223,7 @@ public class PlayerProfile
     public int DailyLoginStreak { get; set; }
     public DateTimeOffset? LastDailySpin { get; set; }
     public int? AvatarId { get; set; }
+    public string InventoryJson { get; set; } = "{}";
 }
 
 public class GlobalSetting
@@ -268,6 +269,9 @@ public class WalletTransaction
 
     [MaxLength(64)]
     public string? IdempotencyKey { get; set; }
+
+    [MaxLength(20)]
+    public string Currency { get; set; } = "Coin";
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

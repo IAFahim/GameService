@@ -155,33 +155,75 @@ public static class EconomyEndpoints
         }
 
         // Determine Reward
-        long amount = 100; // Default
-        if (settings.TryGetValue("Economy:DailyLoginRewards", out var json))
+        RewardDto reward = new("Coin", "Coin", 100); // Default
+        if (settings.TryGetValue("Economy:DailyLoginConfig", out var json))
         {
             try
             {
-                var rewards = JsonSerializer.Deserialize<List<long>>(json);
+                var rewards = JsonSerializer.Deserialize<List<RewardDto>>(json);
                 if (rewards != null && rewards.Count > 0)
                 {
-                    // 0-indexed day, looping
                     var dayIndex = (profile.DailyLoginStreak - 1) % rewards.Count;
-                    amount = rewards[dayIndex];
+                    reward = rewards[dayIndex];
                 }
             }
-            catch { /* Fallback to default */ }
+            catch { /* Fallback */ }
         }
-        else if (settings.TryGetValue("Economy:DailyLoginReward", out var amountStr) && long.TryParse(amountStr, out var parsed))
+        else if (settings.TryGetValue("Economy:DailyLoginRewards", out var oldJson))
         {
-            amount = parsed;
+            // Backward compatibility
+            try
+            {
+                var amounts = JsonSerializer.Deserialize<List<long>>(oldJson);
+                if (amounts != null && amounts.Count > 0)
+                {
+                    var dayIndex = (profile.DailyLoginStreak - 1) % amounts.Count;
+                    reward = new RewardDto("Coin", "Coin", amounts[dayIndex]);
+                }
+            }
+            catch { /* Fallback */ }
         }
 
-        var result = await economy.ProcessTransactionAsync(userId, amount, "DAILY_LOGIN", $"LOGIN:{now:yyyyMMdd}");
-        if (!result.Success) return Results.BadRequest(result.ErrorMessage);
+        // Process Reward
+        long newBalance = profile.Coins;
+        if (reward.Type == "Coin")
+        {
+            var result = await economy.ProcessTransactionAsync(userId, reward.Amount, "DAILY_LOGIN", $"LOGIN:{now:yyyyMMdd}");
+            if (!result.Success) return Results.BadRequest(result.ErrorMessage);
+            newBalance = result.NewBalance;
+        }
+        else
+        {
+            // Handle Item/Resource
+            var inventory = new Dictionary<string, int>();
+            if (!string.IsNullOrEmpty(profile.InventoryJson))
+            {
+                try { inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(profile.InventoryJson) ?? new(); } catch {}
+            }
+            
+            if (!inventory.ContainsKey(reward.Reference)) inventory[reward.Reference] = 0;
+            inventory[reward.Reference] += (int)reward.Amount;
+            
+            profile.InventoryJson = JsonSerializer.Serialize(inventory);
+            
+            // Log transaction for analytics
+            db.WalletTransactions.Add(new WalletTransaction
+            {
+                UserId = userId,
+                Amount = reward.Amount,
+                BalanceAfter = inventory[reward.Reference],
+                TransactionType = "DAILY_LOGIN",
+                Description = $"Daily Login Reward: {reward.Reference}",
+                ReferenceId = $"LOGIN:{now:yyyyMMdd}",
+                Currency = reward.Reference, // Use Reference as Currency/Item Type
+                CreatedAt = now
+            });
+        }
 
         profile.LastDailyLogin = now;
         await db.SaveChangesAsync();
 
-        return Results.Ok(new { Reward = amount, NewBalance = result.NewBalance, Streak = profile.DailyLoginStreak });
+        return Results.Ok(new { Reward = reward, NewBalance = newBalance, Streak = profile.DailyLoginStreak });
     }
 
     private static async Task<IResult> ClaimDailySpin(
@@ -206,12 +248,12 @@ public static class EconomyEndpoints
             return Results.BadRequest("Already spun today.");
 
         // Parse rewards
-        long rewardAmount = 50; // Fallback
-        if (settings.TryGetValue("Economy:DailySpinRewards", out var json))
+        RewardDto reward = new("Coin", "Coin", 50); // Fallback
+        if (settings.TryGetValue("Economy:DailySpinConfig", out var json))
         {
             try
             {
-                var rewards = JsonSerializer.Deserialize<List<SpinReward>>(json);
+                var rewards = JsonSerializer.Deserialize<List<SpinRewardConfig>>(json);
                 if (rewards != null && rewards.Count > 0)
                 {
                     var totalWeight = rewards.Sum(r => r.Weight);
@@ -222,7 +264,7 @@ public static class EconomyEndpoints
                         current += r.Weight;
                         if (roll < current)
                         {
-                            rewardAmount = r.Amount;
+                            reward = r.Reward;
                             break;
                         }
                     }
@@ -231,16 +273,50 @@ public static class EconomyEndpoints
             catch { /* Ignore parse errors */ }
         }
 
-        var result = await economy.ProcessTransactionAsync(userId, rewardAmount, "DAILY_SPIN", $"SPIN:{DateTimeOffset.UtcNow:yyyyMMdd}");
-        if (!result.Success) return Results.BadRequest(result.ErrorMessage);
+        long newBalance = profile.Coins;
+        var now = DateTimeOffset.UtcNow;
 
-        profile.LastDailySpin = DateTimeOffset.UtcNow;
+        if (reward.Type == "Coin")
+        {
+            var result = await economy.ProcessTransactionAsync(userId, reward.Amount, "DAILY_SPIN", $"SPIN:{now:yyyyMMdd}");
+            if (!result.Success) return Results.BadRequest(result.ErrorMessage);
+            newBalance = result.NewBalance;
+        }
+        else
+        {
+             // Handle Item/Resource
+            var inventory = new Dictionary<string, int>();
+            if (!string.IsNullOrEmpty(profile.InventoryJson))
+            {
+                try { inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(profile.InventoryJson) ?? new(); } catch {}
+            }
+            
+            if (!inventory.ContainsKey(reward.Reference)) inventory[reward.Reference] = 0;
+            inventory[reward.Reference] += (int)reward.Amount;
+            
+            profile.InventoryJson = JsonSerializer.Serialize(inventory);
+            
+            db.WalletTransactions.Add(new WalletTransaction
+            {
+                UserId = userId,
+                Amount = reward.Amount,
+                BalanceAfter = inventory[reward.Reference],
+                TransactionType = "DAILY_SPIN",
+                Description = $"Daily Spin Reward: {reward.Reference}",
+                ReferenceId = $"SPIN:{now:yyyyMMdd}",
+                Currency = reward.Reference,
+                CreatedAt = now
+            });
+        }
+
+        profile.LastDailySpin = now;
         await db.SaveChangesAsync();
 
-        return Results.Ok(new { Reward = rewardAmount, NewBalance = result.NewBalance });
+        return Results.Ok(new { Reward = reward, NewBalance = newBalance });
     }
 
-    private record SpinReward(long Amount, int Weight);
+    private record SpinRewardConfig(RewardDto Reward, int Weight);
+    private record SpinReward(long Amount, int Weight); // Legacy support if needed, but replaced by Config
 
     private static async Task<IResult> ProcessTransaction(
         [FromBody] UpdateCoinRequest req,

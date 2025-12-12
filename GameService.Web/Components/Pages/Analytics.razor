@@ -1,0 +1,169 @@
+@page "/analytics"
+@using GameService.ServiceDefaults.DTOs
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject GameAdminService AdminService
+@inject ILogger<Analytics> Logger
+
+<PageTitle>Analytics</PageTitle>
+
+<div class="container-fluid">
+    <h1 class="h3 mb-4 fw-bold">Analytics Dashboard</h1>
+
+    <div class="row g-4">
+        <!-- Daily Login Analytics -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold text-primary"><i class="bi bi-calendar-check me-2"></i>Daily Login Streaks</h5>
+                </div>
+                <div class="card-body">
+                    @if (loginLoading)
+                    {
+                        <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+                    }
+                    else if (loginData.Count == 0)
+                    {
+                        <div class="text-center text-muted py-4">No login streak data available.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Streak Days</th>
+                                        <th>Player Count</th>
+                                        <th>Sample Users</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in loginData)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold">@item.StreakDays Days</td>
+                                            <td>
+                                                <span class="badge bg-primary rounded-pill">@item.PlayerCount</span>
+                                            </td>
+                                            <td class="small text-muted text-truncate" style="max-width: 150px;">
+                                                @string.Join(", ", item.SampleUserIds.Take(3))...
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Daily Spin Analytics -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold text-warning"><i class="bi bi-arrow-repeat me-2"></i>Daily Spin Rewards</h5>
+                </div>
+                <div class="card-body">
+                    @if (spinLoading)
+                    {
+                        <div class="text-center py-4"><div class="spinner-border text-warning"></div></div>
+                    }
+                    else if (spinData.Count == 0)
+                    {
+                        <div class="text-center text-muted py-4">No spin data available.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Reward</th>
+                                        <th>Count</th>
+                                        <th>Distribution</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in spinData)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (item.Currency == "Coin")
+                                                {
+                                                    <span class="text-warning fw-bold"><i class="bi bi-coin"></i> @item.RewardAmount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-info fw-bold"><i class="bi bi-box-seam"></i> @item.RewardAmount @item.Currency</span>
+                                                }
+                                            </td>
+                                            <td>@item.Count</td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <div class="progress flex-grow-1 me-2" style="height: 6px;">
+                                                        <div class="progress-bar bg-warning" style="width: @item.Percentage%"></div>
+                                                    </div>
+                                                    <span class="small text-muted">@item.Percentage%</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool loginLoading = true;
+    private List<DailyLoginAnalyticsDto> loginData = new();
+
+    private bool spinLoading = true;
+    private List<DailySpinAnalyticsDto> spinData = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = LoadLoginData();
+        var t2 = LoadSpinData();
+        await Task.WhenAll(t1, t2);
+    }
+
+    private async Task LoadLoginData()
+    {
+        try
+        {
+            loginLoading = true;
+            loginData = await AdminService.GetDailyLoginAnalyticsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load login analytics");
+        }
+        finally
+        {
+            loginLoading = false;
+        }
+    }
+
+    private async Task LoadSpinData()
+    {
+        try
+        {
+            spinLoading = true;
+            spinData = await AdminService.GetDailySpinAnalyticsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load spin analytics");
+        }
+        finally
+        {
+            spinLoading = false;
+        }
+    }
+}

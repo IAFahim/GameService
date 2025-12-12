@@ -1,0 +1,352 @@
+@page "/players"
+@using GameService.ServiceDefaults.DTOs
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject GameAdminService AdminService
+@inject ToastService Toast
+@inject ILogger<Players> Logger
+@inject IJSRuntime JS
+
+<PageTitle>Player Management</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 fw-bold">Player Management</h1>
+            <p class="text-muted small mb-0">View and manage registered players</p>
+        </div>
+        <button class="btn btn-outline-secondary" @onclick="LoadPlayers">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else
+    {
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Coins</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var player in players)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-circle bg-primary text-white me-2">
+                                            @player.Username.Substring(0, 1).ToUpper()
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">@player.Username</div>
+                                            <div class="small text-muted">ID: @player.UserId</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>@player.Email</td>
+                                <td>
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-coin"></i> @player.Coins.ToString("N0")
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (player.IsOnline)
+                                    {
+                                        <span class="badge bg-success">Online</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Offline</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditPlayer(player)">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info me-1" @onclick="() => ViewHistory(player)">
+                                        <i class="bi bi-clock-history"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-warning me-1" @onclick="() => AdjustCoins(player)">
+                                        <i class="bi bi-cash-coin"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeletePlayer(player)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@if (showEditModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Profile: @selectedPlayer?.Username</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Display Name</label>
+                        <input type="text" class="form-control" @bind="editName" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" @bind="editEmail" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Avatar ID</label>
+                        <input type="number" class="form-control" @bind="editAvatarId" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveProfile">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showCoinModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Adjust Coins: @selectedPlayer?.Username</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Amount (Positive to add, Negative to deduct)</label>
+                        <input type="number" class="form-control" @bind="coinAdjustment" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveCoins">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showHistoryModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Wallet History: @selectedPlayer?.Username</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    @if (historyLoading)
+                    {
+                        <div class="text-center"><div class="spinner-border text-primary"></div></div>
+                    }
+                    else if (history.Count == 0)
+                    {
+                        <div class="text-center text-muted">No transactions found.</div>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Balance</th>
+                                    <th>Desc</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var tx in history)
+                                {
+                                    <tr>
+                                        <td>@tx.CreatedAt.ToString("g")</td>
+                                        <td>@tx.TransactionType</td>
+                                        <td class="@(tx.Amount > 0 ? "text-success" : "text-danger")">
+                                            @tx.Amount.ToString("+0;-0")
+                                        </td>
+                                        <td>@tx.BalanceAfter</td>
+                                        <td class="small text-muted">@tx.Description</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .avatar-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private List<AdminPlayerDto> players = new();
+    
+    private AdminPlayerDto? selectedPlayer;
+    private bool showEditModal;
+    private bool showCoinModal;
+    private bool showHistoryModal;
+    
+    // Edit Profile
+    private string editName = "";
+    private string editEmail = "";
+    private int? editAvatarId;
+    
+    // Coin Adjust
+    private long coinAdjustment;
+    
+    // History
+    private bool historyLoading;
+    private List<WalletTransactionDto> history = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPlayers();
+    }
+
+    private async Task LoadPlayers()
+    {
+        try
+        {
+            isLoading = true;
+            players = await AdminService.GetPlayersAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load players");
+            Toast.ShowError("Failed to load players");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void EditPlayer(AdminPlayerDto player)
+    {
+        selectedPlayer = player;
+        editName = player.Username;
+        editEmail = player.Email;
+        editAvatarId = null; // Need to fetch profile to get this, or add to DTO. For now null.
+        showEditModal = true;
+    }
+
+    private void AdjustCoins(AdminPlayerDto player)
+    {
+        selectedPlayer = player;
+        coinAdjustment = 0;
+        showCoinModal = true;
+    }
+
+    private async Task ViewHistory(AdminPlayerDto player)
+    {
+        selectedPlayer = player;
+        showHistoryModal = true;
+        historyLoading = true;
+        try
+        {
+            var result = await AdminService.GetPlayerHistoryAsync(player.UserId);
+            history = result?.Items.ToList() ?? new();
+        }
+        catch
+        {
+            Toast.ShowError("Failed to load history");
+        }
+        finally
+        {
+            historyLoading = false;
+        }
+    }
+
+    private void CloseModals()
+    {
+        showEditModal = false;
+        showCoinModal = false;
+        showHistoryModal = false;
+        selectedPlayer = null;
+    }
+
+    private async Task SaveProfile()
+    {
+        if (selectedPlayer == null) return;
+        try
+        {
+            await AdminService.UpdatePlayerProfileAsync(selectedPlayer.UserId, new AdminUpdateProfileRequest(editName, editAvatarId, editEmail));
+            Toast.ShowSuccess("Profile updated");
+            CloseModals();
+            await LoadPlayers();
+        }
+        catch
+        {
+            Toast.ShowError("Failed to update profile");
+        }
+    }
+
+    private async Task SaveCoins()
+    {
+        if (selectedPlayer == null || coinAdjustment == 0) return;
+        try
+        {
+            await AdminService.UpdatePlayerCoinsAsync(selectedPlayer.UserId, coinAdjustment);
+            Toast.ShowSuccess("Coins updated");
+            CloseModals();
+            await LoadPlayers();
+        }
+        catch
+        {
+            Toast.ShowError("Failed to update coins");
+        }
+    }
+
+    private async Task DeletePlayer(AdminPlayerDto player)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete user {player.Username}? This cannot be undone.")) return;
+        
+        try
+        {
+            await AdminService.DeletePlayerAsync(player.UserId);
+            Toast.ShowSuccess("Player deleted");
+            await LoadPlayers();
+        }
+        catch
+        {
+            Toast.ShowError("Failed to delete player");
+        }
+    }
+}

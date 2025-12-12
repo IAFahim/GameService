@@ -1,5 +1,6 @@
 @page "/economy-settings"
 @using GameService.ServiceDefaults.Data
+@using GameService.ServiceDefaults.DTOs
 @using System.Text.Json
 @using GameService.Web.Components.Admin
 @attribute [Authorize]
@@ -89,16 +90,58 @@
                             </div>
                         </div>
                         <div class="card-body">
-                            <div class="mb-4">
-                                <label for="dailyLoginReward" class="form-label fw-bold">Base Reward Amount</label>
-                                <div class="input-group input-group-lg">
-                                    <span class="input-group-text bg-success-subtle text-success border-success-subtle"><i class="bi bi-gift-fill"></i></span>
-                                    <input type="number" class="form-control border-success-subtle" id="dailyLoginReward" 
-                                           value="@dailyLoginReward" 
-                                           @onchange="@(e => UpdateLongSetting("Economy:DailyLoginReward", e.Value?.ToString()))">
-                                    <span class="input-group-text bg-success-subtle text-success border-success-subtle">Coins</span>
-                                </div>
-                                <div class="form-text">Fixed amount awarded once every 24 hours.</div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label fw-bold mb-0">Reward Sequence (Loops)</label>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="AddLoginReward">
+                                    <i class="bi bi-plus-lg"></i> Add Day
+                                </button>
+                            </div>
+                            
+                            <div class="login-rewards-list" style="max-height: 300px; overflow-y: auto;">
+                                @if (dailyLoginRewards.Count == 0)
+                                {
+                                    <div class="text-center text-muted py-3 small">No rewards defined.</div>
+                                }
+                                else 
+                                {
+                                    @for (int i = 0; i < dailyLoginRewards.Count; i++)
+                                    {
+                                        var index = i;
+                                        var item = dailyLoginRewards[i];
+                                        
+                                        <div class="input-group input-group-sm mb-2">
+                                            <span class="input-group-text" style="width: 80px;">Day @(i + 1)</span>
+                                            
+                                            <select class="form-select" style="max-width: 80px;" value="@item.Type" @onchange="@(e => UpdateLoginRewardType(index, e))">
+                                                <option value="Coin">Coin</option>
+                                                <option value="Item">Item</option>
+                                            </select>
+                                            
+                                            @if (item.Type == "Item")
+                                            {
+                                                <input type="text" class="form-control" placeholder="Item ID" 
+                                                       value="@item.Reference" 
+                                                       @onchange="@(e => UpdateLoginRewardReference(index, e.Value))">
+                                            }
+                                            
+                                            <input type="number" class="form-control" placeholder="Amount" 
+                                                   value="@item.Amount" 
+                                                   @onchange="@(e => UpdateLoginRewardAmount(index, e.Value))">
+                                                   
+                                            <span class="input-group-text">@item.Type</span>
+                                            
+                                            <button class="btn btn-outline-danger" @onclick="() => RemoveLoginReward(index)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            
+                            <div class="mt-3 text-end">
+                                <button class="btn btn-primary btn-sm" @onclick="SaveLoginRewards">
+                                    <i class="bi bi-save me-2"></i>Save Config
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -152,15 +195,30 @@
                                                 
                                                 <div class="input-group input-group-sm mb-2">
                                                     <span class="input-group-text" style="width: 60px;">@percent%</span>
+                                                    
+                                                    <select class="form-select" style="max-width: 80px;" value="@item.Reward.Type" @onchange="@(e => UpdateSegmentType(index, e))">
+                                                        <option value="Coin">Coin</option>
+                                                        <option value="Item">Item</option>
+                                                    </select>
+                                                    
+                                                    @if (item.Reward.Type == "Item")
+                                                    {
+                                                        <input type="text" class="form-control" placeholder="Item ID" 
+                                                               value="@item.Reward.Reference" 
+                                                               @onchange="@(e => UpdateSegmentReference(index, e.Value))">
+                                                    }
+                                                    
                                                     <input type="number" class="form-control" placeholder="Amount" 
-                                                           value="@item.Amount" 
+                                                           value="@item.Reward.Amount" 
                                                            @onchange="@(e => UpdateSegmentAmount(index, e.Value))">
-                                                    <span class="input-group-text">Coins</span>
+                                                           
+                                                    <span class="input-group-text">@item.Reward.Type</span>
+                                                    
                                                     <input type="number" class="form-control" placeholder="Weight" 
                                                            value="@item.Weight" 
                                                            @onchange="@(e => UpdateSegmentWeight(index, e.Value))">
                                                     <button class="btn btn-outline-danger" @onclick="() => RemoveSpinSegment(index)">
-                                                        <i class="bi bi-x"></i>
+                                                        <i class="bi bi-trash"></i>
                                                     </button>
                                                 </div>
                                             }
@@ -212,14 +270,14 @@
     private long initialCoins;
     
     private bool dailyLoginEnabled;
-    private long dailyLoginReward;
+    private List<RewardDto> dailyLoginRewards = new();
     
     private bool dailySpinEnabled;
-    private List<SpinRewardItem> spinRewards = new();
+    private List<SpinRewardConfig> spinRewards = new();
 
-    public class SpinRewardItem
+    public class SpinRewardConfig
     {
-        public long Amount { get; set; }
+        public RewardDto Reward { get; set; } = new("Coin", "Coin", 100);
         public int Weight { get; set; }
     }
 
@@ -239,27 +297,54 @@
             initialCoins = globalConfig.InitialCoins;
             
             dailyLoginEnabled = GetBool("Economy:DailyLoginEnabled");
-            dailyLoginReward = GetLong("Economy:DailyLoginReward", 100);
             
-            dailySpinEnabled = GetBool("Economy:DailySpinEnabled");
-            var spinJson = GetString("Economy:DailySpinRewards", "[]");
-            
+            // Load Daily Login Rewards
+            var loginJson = GetString("Economy:DailyLoginConfig", "[]");
             try 
             {
-                spinRewards = JsonSerializer.Deserialize<List<SpinRewardItem>>(spinJson) ?? new();
+                dailyLoginRewards = JsonSerializer.Deserialize<List<RewardDto>>(loginJson) ?? new();
             }
             catch 
             { 
-                spinRewards = new();
+                // Fallback to legacy single value or array of longs
+                try {
+                    var oldArr = JsonSerializer.Deserialize<List<long>>(GetString("Economy:DailyLoginRewards", "[]"));
+                    if (oldArr != null) dailyLoginRewards = oldArr.Select(a => new RewardDto("Coin", "Coin", a)).ToList();
+                } catch {
+                    var single = GetLong("Economy:DailyLoginReward", 100);
+                    dailyLoginRewards = new List<RewardDto> { new("Coin", "Coin", single) };
+                }
+            }
+            if (dailyLoginRewards.Count == 0) dailyLoginRewards.Add(new("Coin", "Coin", 100));
+
+            dailySpinEnabled = GetBool("Economy:DailySpinEnabled");
+            var spinJson = GetString("Economy:DailySpinConfig", "[]");
+            
+            try 
+            {
+                spinRewards = JsonSerializer.Deserialize<List<SpinRewardConfig>>(spinJson) ?? new();
+            }
+            catch 
+            { 
+                // Try legacy format fallback
+                try {
+                    var legacy = JsonSerializer.Deserialize<List<SpinRewardItem>>(GetString("Economy:DailySpinRewards", "[]"));
+                    if (legacy != null) {
+                        spinRewards = legacy.Select(l => new SpinRewardConfig { 
+                            Reward = new RewardDto("Coin", "Coin", l.Amount), 
+                            Weight = l.Weight 
+                        }).ToList();
+                    }
+                } catch { spinRewards = new(); }
             }
             
             if (spinRewards.Count == 0)
             {
                 // Defaults
-                spinRewards.Add(new SpinRewardItem { Amount = 50, Weight = 50 });
-                spinRewards.Add(new SpinRewardItem { Amount = 100, Weight = 30 });
-                spinRewards.Add(new SpinRewardItem { Amount = 500, Weight = 10 });
-                spinRewards.Add(new SpinRewardItem { Amount = 1000, Weight = 1 });
+                spinRewards.Add(new SpinRewardConfig { Reward = new("Coin", "Coin", 50), Weight = 50 });
+                spinRewards.Add(new SpinRewardConfig { Reward = new("Coin", "Coin", 100), Weight = 30 });
+                spinRewards.Add(new SpinRewardConfig { Reward = new("Coin", "Coin", 500), Weight = 10 });
+                spinRewards.Add(new SpinRewardConfig { Reward = new("Coin", "Coin", 1000), Weight = 1 });
             }
         }
         catch (Exception ex)
@@ -270,6 +355,110 @@
         finally
         {
             isLoading = false;
+        }
+    }
+
+    // ... (Helpers remain same) ...
+
+    private void AddLoginReward()
+    {
+        dailyLoginRewards.Add(new("Coin", "Coin", 100));
+    }
+
+    private void RemoveLoginReward(int index)
+    {
+        if (index >= 0 && index < dailyLoginRewards.Count)
+        {
+            dailyLoginRewards.RemoveAt(index);
+        }
+    }
+
+    private void UpdateLoginRewardAmount(int index, object? value)
+    {
+        if (long.TryParse(value?.ToString(), out var val))
+        {
+            dailyLoginRewards[index] = dailyLoginRewards[index] with { Amount = val };
+        }
+    }
+
+    private void UpdateLoginRewardType(int index, ChangeEventArgs e)
+    {
+        var type = e.Value?.ToString() ?? "Coin";
+        var refId = type == "Coin" ? "Coin" : "Item";
+        dailyLoginRewards[index] = dailyLoginRewards[index] with { Type = type, Reference = refId };
+    }
+
+    private void UpdateLoginRewardReference(int index, object? value)
+    {
+        dailyLoginRewards[index] = dailyLoginRewards[index] with { Reference = value?.ToString() ?? "" };
+    }
+
+    private async Task SaveLoginRewards()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(dailyLoginRewards);
+            await UpdateSetting("Economy:DailyLoginConfig", json);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to save login rewards");
+            Toast.ShowError("Failed to save login config");
+        }
+    }
+
+    private void AddSpinSegment()
+    {
+        spinRewards.Add(new SpinRewardConfig { Reward = new("Coin", "Coin", 100), Weight = 10 });
+    }
+
+    private void RemoveSpinSegment(int index)
+    {
+        if (index >= 0 && index < spinRewards.Count)
+        {
+            spinRewards.RemoveAt(index);
+        }
+    }
+
+    private void UpdateSegmentAmount(int index, object? value)
+    {
+        if (long.TryParse(value?.ToString(), out var val))
+        {
+            spinRewards[index].Reward = spinRewards[index].Reward with { Amount = val };
+        }
+    }
+
+    private void UpdateSegmentType(int index, ChangeEventArgs e)
+    {
+        var type = e.Value?.ToString() ?? "Coin";
+        var refId = type == "Coin" ? "Coin" : "Item";
+        spinRewards[index].Reward = spinRewards[index].Reward with { Type = type, Reference = refId };
+    }
+
+    private void UpdateSegmentReference(int index, object? value)
+    {
+        spinRewards[index].Reward = spinRewards[index].Reward with { Reference = value?.ToString() ?? "" };
+    }
+
+    private void UpdateSegmentWeight(int index, object? value)
+    {
+        if (int.TryParse(value?.ToString(), out var val))
+        {
+            spinRewards[index].Weight = Math.Max(1, val);
+        }
+    }
+
+    private async Task SaveSpinRewards()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(spinRewards);
+            await UpdateSetting("Economy:DailySpinConfig", json);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to save spin rewards");
+            Toast.ShowError("Failed to save spin config");
         }
     }
 
@@ -302,51 +491,7 @@
         if (long.TryParse(value, out var res))
         {
             await UpdateSetting(key, res.ToString());
-            if (key == "Economy:DailyLoginReward") dailyLoginReward = res;
             if (key == "Economy:InitialCoins") initialCoins = res;
-        }
-    }
-
-    private void AddSpinSegment()
-    {
-        spinRewards.Add(new SpinRewardItem { Amount = 100, Weight = 10 });
-    }
-
-    private void RemoveSpinSegment(int index)
-    {
-        if (index >= 0 && index < spinRewards.Count)
-        {
-            spinRewards.RemoveAt(index);
-        }
-    }
-
-    private void UpdateSegmentAmount(int index, object? value)
-    {
-        if (long.TryParse(value?.ToString(), out var val))
-        {
-            spinRewards[index].Amount = val;
-        }
-    }
-
-    private void UpdateSegmentWeight(int index, object? value)
-    {
-        if (int.TryParse(value?.ToString(), out var val))
-        {
-            spinRewards[index].Weight = Math.Max(1, val);
-        }
-    }
-
-    private async Task SaveSpinRewards()
-    {
-        try
-        {
-            var json = JsonSerializer.Serialize(spinRewards);
-            await UpdateSetting("Economy:DailySpinRewards", json);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to save spin rewards");
-            Toast.ShowError("Failed to save spin config");
         }
     }
 
@@ -403,4 +548,7 @@
         
         return $"background: conic-gradient({string.Join(", ", parts)})";
     }
+    
+    // Legacy class for migration
+    public class SpinRewardItem { public long Amount { get; set; } public int Weight { get; set; } }
 }

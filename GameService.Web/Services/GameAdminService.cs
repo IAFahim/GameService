@@ -161,6 +161,27 @@ public class GameAdminService(HttpClient http)
         }
     }
 
+    public async Task<List<DailyLoginAnalyticsDto>> GetDailyLoginAnalyticsAsync()
+    {
+        return await http.GetFromJsonAsync<List<DailyLoginAnalyticsDto>>("/admin/analytics/daily-login") ?? [];
+    }
+
+    public async Task<List<DailySpinAnalyticsDto>> GetDailySpinAnalyticsAsync()
+    {
+        return await http.GetFromJsonAsync<List<DailySpinAnalyticsDto>>("/admin/analytics/daily-spin") ?? [];
+    }
+
+    public async Task<List<GamePlayerDto>> GetGamePlayersAsync(string roomId)
+    {
+        return await http.GetFromJsonAsync<List<GamePlayerDto>>($"/admin/games/{roomId}/players") ?? [];
+    }
+
+    public async Task UpdatePlayerProfileAsync(string userId, AdminUpdateProfileRequest req)
+    {
+        var response = await http.PutAsJsonAsync($"/admin/players/{userId}/profile", req);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task SaveGameEconomyConfigAsync(string gameType, GameEconomyConfig config)
     {
         var json = JsonSerializer.Serialize(config);

@@ -599,19 +599,19 @@ Content-Type: {{contentType}}
 
 {
   "gameType": "Ludo",
-  "playerCount": 4,
+  "playerCount": 1,
   "entryFee": 100
 }
 
 > {%
-    client.test("Ludo Game Created", function () {
-        client.assert(response.status === 200, "Ludo game should be created");
-        client.assert(response.body.roomId !== undefined, "Should return roomId");
-    });
-    if (response.status === 200) {
-        client.global.set("ludo_room_id", response.body.roomId);
-        client.log("🎲 Ludo Room: " + response.body.roomId);
-    }
+  client.test("Ludo Game Created", function () {
+    client.assert(response.status === 200, "Ludo game should be created");
+    client.assert(response.body.roomId !== undefined, "Should return roomId");
+  });
+  if (response.status === 200) {
+    client.global.set("ludo_room_id", response.body.roomId);
+    client.log("🎲 Ludo Room: " + response.body.roomId);
+  }
 %}
 
 ###
@@ -1259,6 +1259,19 @@ Content-Type: {{contentType}}
 }
 
 ###
+# @name ConfigureDailyLoginArray
+# 12.2.1 Admin: Configure Daily Login Array (Required before claiming)
+PUT {{host}}/admin/settings
+Authorization: Bearer {{admin_token}}
+Content-Type: {{contentType}}
+
+{
+  "key": "Economy:DailyLoginRewards",
+  "value": "[100, 200, 500]",
+  "description": "Day 1: 100, Day 2: 200, Day 3: 500 (Loops)"
+}
+
+###
 # @name EnableDailySpin
 # 12.3 Admin: Enable daily spin
 PUT {{host}}/admin/settings
@@ -1333,7 +1346,7 @@ Authorization: Bearer {{user_token}}
 
 ###
 # @name ConfigureDailyLoginArray
-# 12.8 Admin: Configure Daily Login Array
+# 12.8 Admin: Configure Daily Login Array (Legacy/Fallback)
 PUT {{host}}/admin/settings
 Authorization: Bearer {{admin_token}}
 Content-Type: {{contentType}}
@@ -1388,6 +1401,32 @@ Content-Type: {{contentType}}
         client.assert(response.status === 200, "Should succeed");
     });
 %}
+
+###
+# @name ConfigureFlexibleDailyLogin
+# 12.12 Admin: Configure Flexible Daily Login (Coins + Items)
+PUT {{host}}/admin/settings
+Authorization: Bearer {{admin_token}}
+Content-Type: {{contentType}}
+
+{
+  "key": "Economy:DailyLoginConfig",
+  "value": "[{\"Type\":\"Coin\",\"Reference\":\"Coin\",\"Amount\":100}, {\"Type\":\"Item\",\"Reference\":\"Gem\",\"Amount\":5}]",
+  "description": "Day 1: 100 Coins, Day 2: 5 Gems"
+}
+
+###
+# @name ConfigureFlexibleDailySpin
+# 12.13 Admin: Configure Flexible Daily Spin
+PUT {{host}}/admin/settings
+Authorization: Bearer {{admin_token}}
+Content-Type: {{contentType}}
+
+{
+  "key": "Economy:DailySpinConfig",
+  "value": "[{\"Reward\":{\"Type\":\"Coin\",\"Reference\":\"Coin\",\"Amount\":1000},\"Weight\":50}, {\"Reward\":{\"Type\":\"Item\",\"Reference\":\"Sword\",\"Amount\":1},\"Weight\":50}]",
+  "description": "50% Chance 1000 Coins, 50% Chance 1 Sword"
+}
 
 ###
 # ==========================================

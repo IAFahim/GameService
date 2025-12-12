@@ -1,5 +1,6 @@
 @page "/games/{RoomId}"
 @using System.Text.Json
+@using GameService.ServiceDefaults.DTOs
 @using GameService.LuckyMine
 @using GameService.Web.Components.LuckyMine
 @using GameService.Web.Components.Ludo
@@ -25,51 +26,95 @@
     {
         <div class="spinner-border text-primary"></div>
     }
-    else if (ludoState != null)
+    else 
     {
-        <!-- Header Info -->
-        <div class="alert @(ludoState.IsGameOver ? "alert-success" : "alert-info")">
-            @if (ludoState.IsGameOver)
-            {
-                <h4><i class="bi bi-trophy-fill me-2"></i>Game Over!</h4>
-            }
-            else
-            {
-                <h4>Current Turn: Player @ludoState.CurrentPlayer</h4>
-                <div class="d-flex gap-3">
-                    <span><i
-                            class="bi bi-dice-6 me-1"></i>Last Roll: @(ludoState.LastDiceRoll == 0 ? "-" : ludoState.LastDiceRoll)</span>
-                    <span><i class="bi bi-clock-history me-1"></i>Turn ID: @ludoState.TurnId</span>
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white py-2">
+                        <h6 class="mb-0 fw-bold"><i class="bi bi-people me-2"></i>Players in Room</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (players.Count == 0)
+                        {
+                            <div class="text-center text-muted py-3 small">No players currently in room.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Seat</th>
+                                            <th>User</th>
+                                            <th>ID</th>
+                                            <th>Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var p in players)
+                                        {
+                                            <tr>
+                                                <td><span class="badge bg-secondary">@p.SeatNumber</span></td>
+                                                <td class="fw-bold">@p.UserName</td>
+                                                <td class="small text-muted">@p.UserId</td>
+                                                <td>@(p.IsBot ? "Bot" : "Human")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
                 </div>
-            }
+            </div>
         </div>
+    }
 
-        <LudoAdminPanel RoomId="@RoomId" State="ludoState" OnRefresh="LoadGame"/>
-    }
-    else if (luckyMineState != null)
-    {
-        <div
-            class="alert @(luckyMineState.Status == "Active" ? "alert-info" : luckyMineState.Status == "CashedOut" ? "alert-success" : "alert-danger")">
-            Status: <strong>@luckyMineState.Status</strong> |
-            Mines: @luckyMineState.TotalMines / @luckyMineState.TotalTiles |
-            Revealed: @luckyMineState.RevealedSafeCount |
-            Winnings: @luckyMineState.CurrentWinnings
-        </div>
+    @if (ludoState != null)
+        {
+            <!-- Header Info -->
+            <div class="alert @(ludoState.IsGameOver ? "alert-success" : "alert-info")">
+                @if (ludoState.IsGameOver)
+                {
+                    <h4><i class="bi bi-trophy-fill me-2"></i>Game Over!</h4>
+                }
+                else
+                {
+                    <h4>Current Turn: Player @ludoState.CurrentPlayer</h4>
+                    <div class="d-flex gap-3">
+                        <span><i class="bi bi-dice-6 me-1"></i>Last Roll: @(ludoState.LastDiceRoll == 0 ? "-" : ludoState.LastDiceRoll)</span>
+                        <span><i class="bi bi-clock-history me-1"></i>Turn ID: @ludoState.TurnId</span>
+                    </div>
+                }
+            </div>
 
-        <LuckyMineAdminPanel Dto="luckyMineState"/>
-    }
-    else if (!string.IsNullOrEmpty(rawJson))
-    {
-        <div class="alert alert-warning">
-            Visual inspector not available for this game type. Showing raw data.
-        </div>
-        <pre class="bg-light p-3 border rounded">@rawJson</pre>
-    }
-    else
-    {
-        <div class="alert alert-danger">
-            Room not found or failed to load.
-        </div>
+            <LudoAdminPanel RoomId="@RoomId" State="ludoState" OnRefresh="LoadGame"/>
+        }
+        else if (luckyMineState != null)
+        {
+            <div class="alert @(luckyMineState.Status == "Active" ? "alert-info" : luckyMineState.Status == "CashedOut" ? "alert-success" : "alert-danger")">
+                Status: <strong>@luckyMineState.Status</strong> |
+                Mines: @luckyMineState.TotalMines / @luckyMineState.TotalTiles |
+                Revealed: @luckyMineState.RevealedSafeCount |
+                Winnings: @luckyMineState.CurrentWinnings
+            </div>
+
+            <LuckyMineAdminPanel Dto="luckyMineState"/>
+        }
+        else if (!string.IsNullOrEmpty(rawJson))
+        {
+            <div class="alert alert-warning">
+                Visual inspector not available for this game type. Showing raw data.
+            </div>
+            <pre class="bg-light p-3 border rounded">@rawJson</pre>
+        }
+        else
+        {
+            <div class="alert alert-danger">
+                Room not found or failed to load.
+            </div>
+        }
     }
 </div>
 
@@ -81,6 +126,7 @@
     private string? rawJson;
     private LudoStateDto? ludoState;
     private LuckyMineFullDto? luckyMineState;
+    private List<GamePlayerDto> players = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -94,7 +140,14 @@
 
         try
         {
-            var json = await AdminService.GetGameStateAsync(RoomId);
+            var t1 = AdminService.GetGameStateAsync(RoomId);
+            var t2 = AdminService.GetGamePlayersAsync(RoomId);
+            
+            await Task.WhenAll(t1, t2);
+            
+            var json = t1.Result;
+            players = t2.Result;
+
             if (json.HasValue)
             {
                 if (json.Value.TryGetProperty("meta", out var metaProp) &&

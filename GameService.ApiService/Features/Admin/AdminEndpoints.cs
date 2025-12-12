@@ -155,12 +155,13 @@ public static class AdminEndpoints
         var data = await db.WalletTransactions
             .AsNoTracking()
             .Where(t => t.TransactionType == "DAILY_SPIN")
-            .GroupBy(t => t.Amount)
-            .Select(g => new { Amount = g.Key, Count = g.Count() })
-            .OrderBy(x => x.Amount)
+            .GroupBy(t => new { t.Currency, t.Amount })
+            .Select(g => new { g.Key.Currency, g.Key.Amount, Count = g.Count() })
+            .OrderBy(x => x.Currency).ThenBy(x => x.Amount)
             .ToListAsync();
 
         var result = data.Select(x => new DailySpinAnalyticsDto(
+            x.Currency,
             x.Amount, 
             x.Count, 
             Math.Round((double)x.Count / totalSpins * 100, 2)

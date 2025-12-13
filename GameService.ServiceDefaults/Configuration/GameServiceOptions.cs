@@ -26,6 +26,8 @@ public class EconomyOptions
     public long InitialCoins { get; set; } = 100;
 
     public int IdempotencyKeyRetentionDays { get; set; } = 7;
+
+    public string PaymentWebhookSecret { get; set; } = "";
 }
 
 public class SessionOptions

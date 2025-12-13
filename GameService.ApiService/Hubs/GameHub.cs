@@ -17,6 +17,7 @@ namespace GameService.ApiService.Hubs;
 public class GameHub(
     IRoomRegistry roomRegistry,
     IServiceProvider serviceProvider,
+    IServiceScopeFactory serviceScopeFactory,
     IOptions<GameServiceOptions> options,
     IConnectionMultiplexer redis,
     ILogger<GameHub> logger) : Hub<IGameClient>
@@ -59,7 +60,9 @@ public class GameHub(
         var connectionCount = await roomRegistry.IncrementConnectionCountAsync(UserId);
         if (connectionCount > _maxConnectionsPerUser)
         {
-            // Do NOT decrement here. Let OnDisconnected handle it to avoid race conditions
+            await roomRegistry.DecrementConnectionCountAsync(UserId);
+            Context.Items["SkipConnectionDecrement"] = true;
+
             logger.LogWarning("Connection limit exceeded for user {UserId}: {Count}/{Max}",
                 UserId, connectionCount, _maxConnectionsPerUser);
             Context.Abort();
@@ -84,7 +87,8 @@ public class GameHub(
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        await roomRegistry.DecrementConnectionCountAsync(UserId);
+        if (!Context.Items.ContainsKey("SkipConnectionDecrement"))
+            await roomRegistry.DecrementConnectionCountAsync(UserId);
 
         var roomId = await roomRegistry.GetUserRoomAsync(UserId);
 
@@ -124,14 +128,15 @@ public class GameHub(
                                     await roomRegistry.TryGetAndRemoveDisconnectedPlayerAsync(capturedUserId);
                                 if (stillDisconnected == capturedRoomId)
                                 {
+                                    using var scope = serviceScopeFactory.CreateScope();
                                     var roomService =
-                                        serviceProvider.GetKeyedService<IGameRoomService>(capturedGameType);
+                                        scope.ServiceProvider.GetKeyedService<IGameRoomService>(capturedGameType);
                                     if (roomService != null)
                                         await roomService.LeaveRoomAsync(capturedRoomId, capturedUserId);
 
                                     await roomRegistry.RemoveUserRoomAsync(capturedUserId);
 
-                                    var hubContext = serviceProvider.GetRequiredService<IHubContext<GameHub, IGameClient>>();
+                                    var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<GameHub, IGameClient>>();
                                     await hubContext.Clients.Group(capturedRoomId).PlayerLeft(
                                         new PlayerLeftPayload(capturedUserId, capturedUserName));
 
@@ -235,7 +240,6 @@ public class GameHub(
 
             var roomId = await roomService.CreateRoomAsync(meta);
 
-            // Register short code
             var shortCode = await roomRegistry.RegisterShortCodeAsync(roomId);
 
             await roomRegistry.SetUserRoomAsync(UserId, roomId);

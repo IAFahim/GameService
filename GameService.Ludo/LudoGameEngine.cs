@@ -57,11 +57,9 @@ public sealed class LudoGameEngine : ITurnBasedGameEngine
     {
         try
         {
-            // LOAD STATE FIRST to check readiness
             var ctx = await _repository.LoadAsync(roomId);
             if (ctx == null) return GameActionResult.Error("Room not found");
 
-            // WAITING ROOM CHECK
             if (ctx.Meta.PlayerSeats.Count < ctx.Meta.MaxPlayers && command.UserId != GameCoreConstants.AdminUserId)
             {
                 return GameActionResult.Error($"Waiting for players... ({ctx.Meta.PlayerSeats.Count}/{ctx.Meta.MaxPlayers})");

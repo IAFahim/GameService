@@ -111,7 +111,6 @@
             g.Type.Contains(search, StringComparison.OrdinalIgnoreCase))
         ?? Enumerable.Empty<SupportedGameDto>();
 
-    // Form Model
     private int playerCount = 4;
     private long entryFee;
     private string? configJson;
@@ -126,7 +125,6 @@
         selectedGameType = game.Type;
         selectedGameName = game.Name;
 
-        // Smart defaults
         if (selectedGameType == "LuckyMine")
         {
             playerCount = 20;
@@ -149,7 +147,6 @@
 
     private async Task CreateGame()
     {
-        // Enforce limits
         if (playerCount < 1) playerCount = 1;
         if (playerCount > 20) playerCount = 20;
 

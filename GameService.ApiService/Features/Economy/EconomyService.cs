@@ -146,7 +146,6 @@ public class EconomyService(
                             return new TransactionResult(false, 0, TransactionErrorType.Unknown,
                                 "User account not found.");
 
-                        // Check for dynamic initial coins setting
                         var dynamicInitial = await db.GlobalSettings
                             .AsNoTracking()
                             .Where(s => s.Key == "Economy:InitialCoins")
@@ -427,14 +426,14 @@ public class EconomyService(
                             bonusAmount = bonusProp.GetInt64();
                         }
                     }
-                    catch { /* ignore */ }
+                    catch {
+                    }
                 }
 
-                if (bonusAmount <= 0) bonusAmount = 100; // Default
+                if (bonusAmount <= 0) bonusAmount = 100;
 
                 progression.HasClaimedWelcomeBonus = true;
 
-                // Credit logic
                 var profile = await db.PlayerProfiles
                     .FromSqlRaw("SELECT * FROM \"PlayerProfiles\" WHERE \"UserId\" = {0} AND \"IsDeleted\" = false FOR UPDATE", userId)
                     .FirstOrDefaultAsync();
@@ -448,7 +447,6 @@ public class EconomyService(
                 }
                 else
                 {
-                    // Should not happen for existing user but handle it
                     var user = await db.Users.FindAsync(userId);
                     if (user == null) return new TransactionResult(false, 0, TransactionErrorType.Unknown, "User not found");
                     
@@ -526,7 +524,6 @@ public class EconomyService(
                     return new TransactionResult(false, 0, TransactionErrorType.DuplicateTransaction, "Daily reward already claimed today");
                 }
 
-                // Fetch reward config
                 var rewardsJson = await db.GlobalSettings
                     .Where(s => s.Key == $"Game:{gameType}:DailyRewards")
                     .Select(s => s.Value)
@@ -549,10 +546,10 @@ public class EconomyService(
                             }
                         }
                     }
-                    catch { /* ignore */ }
+                    catch {
+                    }
                 }
 
-                // FIX: Correctly determine max day and loop logic
                 int maxDay = rewardsMap.Keys.Count > 0 ? rewardsMap.Keys.Max() : 7;
 
                 if (daysDiff == 1)
@@ -560,19 +557,18 @@ public class EconomyService(
                     progression.DailyLoginStreak++;
                     if (progression.DailyLoginStreak > maxDay) 
                     {
-                        progression.DailyLoginStreak = 1; // Loop back to day 1
+                        progression.DailyLoginStreak = 1;
                     }
                 }
                 else
                 {
-                    progression.DailyLoginStreak = 1; // Reset to day 1 if missed a day
+                    progression.DailyLoginStreak = 1;
                 }
 
                 progression.LastDailyLogin = now;
 
                 long rewardAmount = rewardsMap.TryGetValue(progression.DailyLoginStreak, out var amt) ? amt : 50;
 
-                // Credit logic
                 var profile = await db.PlayerProfiles
                     .FromSqlRaw("SELECT * FROM \"PlayerProfiles\" WHERE \"UserId\" = {0} AND \"IsDeleted\" = false FOR UPDATE", userId)
                     .FirstOrDefaultAsync();

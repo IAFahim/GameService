@@ -225,7 +225,7 @@ public sealed class LuckyMineEngine(
 
         for (var i = 0; i < state.RevealedSafeCount; i++)
         {
-            if (remaining <= 0) return 0; // Prevent division by zero
+            if (remaining <= 0) return 0;
             multiplier *= (double)total / remaining;
             remaining--;
             total--;

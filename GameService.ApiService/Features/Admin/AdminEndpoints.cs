@@ -74,8 +74,7 @@ public static class AdminEndpoints
             kvp.Key,
             users.TryGetValue(kvp.Key, out var name) ? name ?? "Unknown" : "Unknown",
             kvp.Value,
-            false // Bots not yet distinguished in seats, assuming human for now
-        )).ToList();
+            false)).ToList();
 
         return Results.Ok(players);
     }

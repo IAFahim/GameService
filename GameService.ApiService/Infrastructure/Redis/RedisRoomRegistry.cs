@@ -36,20 +36,16 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis) : IRoomRegis
 
     public async Task<string> RegisterShortCodeAsync(string roomId)
     {
-        // Try to generate a unique code up to 10 times
         for (var i = 0; i < 10; i++)
         {
-            // Generate 5-digit code (11111 to 99999) using only 1-9
             var code = string.Create(5, (object?)null, (span, _) =>
             {
                 for (var k = 0; k < span.Length; k++)
                     span[k] = (char)('1' + System.Security.Cryptography.RandomNumberGenerator.GetInt32(9));
             });
 
-            // Try to set if not exists
             if (await _db.HashSetAsync(ShortCodeRegistryKey, code, roomId, When.NotExists))
             {
-                // Store reverse mapping for cleanup
                 await _db.HashSetAsync(RoomShortCodeKey, roomId, code);
                 return code;
             }
@@ -85,8 +81,7 @@ public sealed class RedisRoomRegistry(IConnectionMultiplexer redis) : IRoomRegis
         _ = batch.HashDeleteAsync(GlobalRegistryKey, roomId);
         _ = batch.SortedSetRemoveAsync(GameTypeIndexKey(gameType), roomId);
         _ = batch.SortedSetRemoveAsync(ActivityIndexKey(gameType), roomId);
-        
-        // Also clean up short code if exists
+
         var shortCode = await _db.HashGetAsync(RoomShortCodeKey, roomId);
         if (!shortCode.IsNullOrEmpty)
         {

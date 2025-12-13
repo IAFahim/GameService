@@ -18,7 +18,7 @@ public sealed class LudoClient
 
     public bool IsGameOver => _lastState?.IsGameOver ?? false;
 
-    public bool IsWaitingForPlayers => (_lastState?.ActiveSeatsMask ?? 0) == 0; // Fallback, better to use GameState info
+    public bool IsWaitingForPlayers => (_lastState?.ActiveSeatsMask ?? 0) == 0;
 
     private int _currentPlayerCount;
     private int _maxPlayers;
@@ -31,7 +31,7 @@ public sealed class LudoClient
 
     public event Action<int, int>? OnTokenCaptured;
 
-    public event Action<int>? OnPlayerFinished; // Changed from TokenFinished
+    public event Action<int>? OnPlayerFinished;
 
     public event Action<int>? OnTurnChanged;
 

@@ -17,8 +17,7 @@ public static class EconomyEndpoints
         var group = app.MapGroup("/game").RequireAuthorization();
 
         group.MapPost("/coins/transaction", ProcessTransaction);
-        
-        // FIX: Added explicit credit endpoint for external systems
+
         var publicGroup = app.MapGroup("/game/public");
         publicGroup.MapPost("/coins/credit", ProcessCreditTransaction);
         
@@ -30,12 +29,10 @@ public static class EconomyEndpoints
         group.MapPost("/{gameType}/bonus/welcome", ClaimGameWelcomeBonus);
         group.MapPost("/{gameType}/bonus/daily", ClaimGameDailyReward);
         group.MapGet("/{gameType}/config/economy", GetGameEconomyConfig);
-        
-        // Added this missing endpoint for Admin Panel logic
+
         group.MapGet("/economy/config", GetGlobalEconomyConfig);
     }
-    
-    // FIX: New handler for credits
+
     private static async Task<IResult> ProcessCreditTransaction(
         [FromBody] CreditTransactionRequest req,
         [FromHeader(Name = "X-Payment-Signature")] string signature,
@@ -43,19 +40,47 @@ public static class EconomyEndpoints
         IOptions<GameServiceOptions> options,
         ILogger<EconomyService> logger)
     {
-        // 1. Verify Signature (HMAC)
-        // In a real app, compute HMACSHA256(req.ToString(), options.Value.PaymentSecret) and compare with signature
-        if (string.IsNullOrEmpty(signature)) 
+        if (string.IsNullOrWhiteSpace(signature))
         {
-             logger.LogWarning("Credit attempt without signature for User {UserId}", req.UserId);
-             return Results.Unauthorized();
+            logger.LogWarning("Credit attempt without signature for User {UserId}", req.UserId);
+            return Results.Unauthorized();
         }
 
-        // 2. Validate
+        var secret = options.Value.Economy.PaymentWebhookSecret;
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            logger.LogError("Payment webhook secret not configured; rejecting credit request.");
+            return Results.Problem("Payment webhook not configured", statusCode: StatusCodes.Status500InternalServerError);
+        }
+
+        var provided = signature.Trim();
+        if (provided.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
+            provided = provided["sha256=".Length..];
+
+        byte[] providedBytes;
+        try
+        {
+            providedBytes = Convert.FromHexString(provided);
+        }
+        catch
+        {
+            logger.LogWarning("Invalid payment signature format for User {UserId}", req.UserId);
+            return Results.Unauthorized();
+        }
+
+        var payload = $"{req.UserId}:{req.Amount}:{req.ReferenceId}:{req.IdempotencyKey ?? ""}";
+        using var hmac = new System.Security.Cryptography.HMACSHA256(System.Text.Encoding.UTF8.GetBytes(secret));
+        var computedBytes = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(payload));
+
+        if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(computedBytes, providedBytes))
+        {
+            logger.LogWarning("Invalid payment signature for User {UserId}", req.UserId);
+            return Results.Unauthorized();
+        }
+
         if (req.Amount <= 0) return Results.BadRequest("Amount must be positive");
         if (string.IsNullOrEmpty(req.ReferenceId)) return Results.BadRequest("ReferenceId required");
 
-        // 3. Process
         var result = await service.ProcessTransactionAsync(req.UserId, req.Amount, req.ReferenceId, req.IdempotencyKey);
         
         if (!result.Success)
@@ -70,9 +95,6 @@ public static class EconomyEndpoints
 
     public record CreditTransactionRequest(string UserId, long Amount, string ReferenceId, string? IdempotencyKey);
 
-    // ... (Existing handlers) ...
-    
-    // FIX: Added handler for retrieving effective config
     private static async Task<IResult> GetGlobalEconomyConfig(
         GameDbContext db,
         IOptions<GameServiceOptions> options)
@@ -144,7 +166,6 @@ public static class EconomyEndpoints
         if (profile.LastDailyLogin.HasValue && profile.LastDailyLogin.Value.Date == now.Date)
             return Results.BadRequest("Already claimed today.");
 
-        // Calculate Streak
         if (profile.LastDailyLogin.HasValue && profile.LastDailyLogin.Value.Date == now.AddDays(-1).Date)
         {
             profile.DailyLoginStreak++;
@@ -154,8 +175,7 @@ public static class EconomyEndpoints
             profile.DailyLoginStreak = 1;
         }
 
-        // Determine Reward
-        RewardDto reward = new("Coin", "Coin", 100); // Default
+        RewardDto reward = new("Coin", "Coin", 100);
         if (settings.TryGetValue("Economy:DailyLoginConfig", out var json))
         {
             try
@@ -167,11 +187,11 @@ public static class EconomyEndpoints
                     reward = rewards[dayIndex];
                 }
             }
-            catch { /* Fallback */ }
+            catch {
+            }
         }
         else if (settings.TryGetValue("Economy:DailyLoginRewards", out var oldJson))
         {
-            // Backward compatibility
             try
             {
                 var amounts = JsonSerializer.Deserialize<List<long>>(oldJson);
@@ -181,10 +201,10 @@ public static class EconomyEndpoints
                     reward = new RewardDto("Coin", "Coin", amounts[dayIndex]);
                 }
             }
-            catch { /* Fallback */ }
+            catch {
+            }
         }
 
-        // Process Reward
         long newBalance = profile.Coins;
         if (reward.Type == "Coin")
         {
@@ -194,7 +214,6 @@ public static class EconomyEndpoints
         }
         else
         {
-            // Handle Item/Resource
             var inventory = new Dictionary<string, int>();
             if (!string.IsNullOrEmpty(profile.InventoryJson))
             {
@@ -205,8 +224,7 @@ public static class EconomyEndpoints
             inventory[reward.Reference] += (int)reward.Amount;
             
             profile.InventoryJson = JsonSerializer.Serialize(inventory);
-            
-            // Log transaction for analytics
+
             db.WalletTransactions.Add(new WalletTransaction
             {
                 UserId = userId,
@@ -215,7 +233,7 @@ public static class EconomyEndpoints
                 TransactionType = "DAILY_LOGIN",
                 Description = $"Daily Login Reward: {reward.Reference}",
                 ReferenceId = $"LOGIN:{now:yyyyMMdd}",
-                Currency = reward.Reference, // Use Reference as Currency/Item Type
+                Currency = reward.Reference,
                 CreatedAt = now
             });
         }
@@ -247,8 +265,7 @@ public static class EconomyEndpoints
         if (profile.LastDailySpin.HasValue && profile.LastDailySpin.Value.Date == DateTimeOffset.UtcNow.Date)
             return Results.BadRequest("Already spun today.");
 
-        // Parse rewards
-        RewardDto reward = new("Coin", "Coin", 50); // Fallback
+        RewardDto reward = new("Coin", "Coin", 50);
         if (settings.TryGetValue("Economy:DailySpinConfig", out var json))
         {
             try
@@ -270,7 +287,8 @@ public static class EconomyEndpoints
                     }
                 }
             }
-            catch { /* Ignore parse errors */ }
+            catch {
+            }
         }
 
         long newBalance = profile.Coins;
@@ -284,7 +302,6 @@ public static class EconomyEndpoints
         }
         else
         {
-             // Handle Item/Resource
             var inventory = new Dictionary<string, int>();
             if (!string.IsNullOrEmpty(profile.InventoryJson))
             {
@@ -316,7 +333,7 @@ public static class EconomyEndpoints
     }
 
     private record SpinRewardConfig(RewardDto Reward, int Weight);
-    private record SpinReward(long Amount, int Weight); // Legacy support if needed, but replaced by Config
+    private record SpinReward(long Amount, int Weight);
 
     private static async Task<IResult> ProcessTransaction(
         [FromBody] UpdateCoinRequest req,
@@ -337,22 +354,7 @@ public static class EconomyEndpoints
 
         if (req.Amount > 0)
         {
-            // Allow positive amounts only if signed with a valid payment signature (placeholder for future implementation)
-            // For now, we still block direct user credits unless it's a system/admin call which should use a different endpoint or key.
-            // However, the requirement is to allow external systems.
-            // We will check for a specific header or claim that indicates a trusted payment provider.
-            // Since we don't have that infrastructure yet, we will allow it but log a warning if not admin.
-            // Ideally this should be secured. For the purpose of the fix, we remove the block but add a check.
-            
-            // If the user is not Admin, we should probably still block it unless we have a way to verify source.
-            // But the issue description says "No way for payment gateway... without using Admin API key".
-            // So we should probably allow it if it's a server-to-server call, but here we are in a user context endpoint.
-            // The fix suggests creating a Public "Credit" Endpoint secured via callback signature.
-            // But for this specific line, we can just remove it if we assume the caller is trusted or if we add a separate endpoint.
-            // Let's modify it to allow if the user has a specific claim or if we add a new endpoint.
-            // The prompt says "Create Public 'Credit' Endpoint...".
-            // So I will leave this as is (blocking user credits) and add a new endpoint below.
-             return Results.BadRequest("Users cannot credit coins directly. Use the payment webhook endpoint.");
+            return Results.BadRequest("Users cannot credit coins directly. Use the payment webhook endpoint.");
         }
 
         var result = await service.ProcessTransactionAsync(userId, req.Amount, req.ReferenceId, req.IdempotencyKey);

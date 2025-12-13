@@ -16,7 +16,6 @@
                 double sliceAngle = (weight / totalWeight) * 360;
                 double endAngle = startAngle + sliceAngle;
 
-                // Convert to radians
                 double startRad = (startAngle - 90) * Math.PI / 180.0;
                 double endRad = (endAngle - 90) * Math.PI / 180.0;
 
@@ -28,8 +27,7 @@
                 var largeArc = sliceAngle > 180 ? 1 : 0;
 
                 <path d="M0,0 L@x1,@y1 A100,100 0 @largeArc,1 @x2,@y2 Z" fill="@segment.Color" stroke="#fff" stroke-width="2" />
-                
-                // Text label
+
                 double midAngle = startAngle + sliceAngle / 2;
                 double midRad = (midAngle - 90) * Math.PI / 180.0;
                 var tx = 60 * Math.Cos(midRad);

@@ -23,8 +23,9 @@ builder.Services.AddHttpClient<GameAdminService>((sp, client) =>
 {
     client.BaseAddress = new Uri("http://apiservice");
     var config = sp.GetRequiredService<IConfiguration>();
-    var apiKey = config["AdminSettings:ApiKey"] ?? "SecretAdminKey123!";
-    client.DefaultRequestHeaders.Add("X-Admin-Key", apiKey);
+    var apiKey = config["AdminSettings:ApiKey"];
+    if (!string.IsNullOrWhiteSpace(apiKey))
+        client.DefaultRequestHeaders.Add("X-Admin-Key", apiKey);
 });
 builder.Services.AddHostedService<RedisLogStreamer>();
 

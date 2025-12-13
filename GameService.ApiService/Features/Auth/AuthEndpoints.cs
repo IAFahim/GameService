@@ -17,7 +17,6 @@ public static class AuthEndpoints
                 var jti = ctx.User.FindFirstValue("jti");
                 if (!string.IsNullOrEmpty(jti))
                 {
-                    // Revoke the specific token ID (JTI)
                     await revocationService.RevokeTokenAsync(jti);
                 }
 

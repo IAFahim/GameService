@@ -138,7 +138,6 @@ public class GameDbContext : IdentityDbContext<ApplicationUser>
             .Select(e => e.Entity)
             .ToList();
 
-        // FIX: Check DB setting for override before processing new users
         long effectiveInitialCoins = _initialCoins;
         if (newUsers.Count > 0)
         {
@@ -163,7 +162,7 @@ public class GameDbContext : IdentityDbContext<ApplicationUser>
                 {
                     User = user,
                     UserId = user.Id,
-                    Coins = effectiveInitialCoins, // FIX: Use the resolved value
+                    Coins = effectiveInitialCoins,
                     Version = Guid.NewGuid()
                 });
             }

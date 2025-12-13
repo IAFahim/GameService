@@ -11,8 +11,8 @@
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler"/>
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column pt-3">
+<div class="nav-scrollable">
+    <nav class="admin-nav nav flex-column pt-3">
 
         <div class="nav-item px-3 mb-1">
             <NavLink class="nav-link" href="players">
@@ -59,7 +59,6 @@
             </NavLink>
         </div>
 
-
         <div class="nav-item px-3 mb-1">
             <NavLink class="nav-link" href="templates">
                 <span class="nav-icon-wrapper">
@@ -71,59 +70,3 @@
 
     </nav>
 </div>
-
-<style>
-    /* Base Link Styling */
-    .nav-link {
-        display: flex;
-        align-items: center;
-        padding: 0.75rem 1rem;
-        border-radius: 8px;
-        color: rgba(255, 255, 255, 0.75);
-        transition: all 0.2s ease;
-        position: relative; /* Essential for the absolute stripe */
-        overflow: hidden; /* Keeps the stripe inside the rounded corners */
-    }
-
-    .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff;
-    }
-
-    /* Fixed Width Icon Container for Perfect Vertical Alignment */
-    .nav-icon-wrapper {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 24px; /* Fixed width prevents wobble */
-        height: 24px; /* Fixed height for centering */
-        margin-right: 12px;
-        font-size: 1.1rem;
-        line-height: 1; /* Remove font leading variance */
-    }
-
-    .nav-text {
-        font-weight: 500;
-        letter-spacing: 0.01em;
-    }
-
-    /* Active State - Using Pseudo-element to prevent layout shift */
-    .nav-link.active {
-        background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.0) 100%);
-        color: #fff;
-        /* No border-left here! It causes layout shifts. */
-    }
-
-    /* The Active Indicator Stripe */
-    .nav-link.active::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 4px; /* The stripe width */
-        background-color: #fff; /* Or your brand color */
-        border-top-right-radius: 4px;
-        border-bottom-right-radius: 4px;
-    }
-</style>

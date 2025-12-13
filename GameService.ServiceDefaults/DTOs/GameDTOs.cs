@@ -6,7 +6,7 @@ public record struct PlayerProfileResponse(string UserId, long Coins, string? Ac
 
 public record PagedResult<T>(IEnumerable<T> Items, int TotalCount, int Page, int PageSize);
 
-public record AdminPlayerDto(int ProfileId, string UserId, string Username, string Email, long Coins, bool IsOnline = false);
+public record AdminPlayerDto(int ProfileId, string UserId, string Username, string Email, long Coins, bool IsOnline = false, int? AvatarId = null);
 
 public enum PlayerChangeType
 {

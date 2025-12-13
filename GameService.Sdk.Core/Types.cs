@@ -46,7 +46,16 @@ public sealed record GameRoomDto(
     bool IsPublic, 
     IReadOnlyDictionary<string, int> PlayerSeats);
 
-public sealed record QuickMatchRequest(string GameType, int MaxPlayers, long EntryFee);
+public sealed record SupportedGameDto(string Name, string Type);
+
+public sealed record CreateRoomRequest(string GameType, int PlayerCount, long EntryFee = 0, string? ConfigJson = null);
+
+public sealed record CreateRoomResponseHttp(string RoomId, string GameType);
+
+public sealed record QuickMatchRequest(string GameType, int MaxPlayers, long EntryFee)
+{
+    public int? TemplateId { get; init; }
+}
 
 public sealed record QuickMatchResponse(string RoomId, string Action);
 

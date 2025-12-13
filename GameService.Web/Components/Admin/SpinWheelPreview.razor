@@ -6,12 +6,14 @@
         @if (Segments != null && Segments.Any())
         {
             double startAngle = 0;
-            double totalWeight = Segments.Sum(s => s.Weight);
-            if (totalWeight == 0) totalWeight = 1;
+            double totalWeight = Segments.Sum(s => (double)Math.Max(0, s.Weight));
+            var fallbackEqual = totalWeight <= 0;
+            if (fallbackEqual) totalWeight = Segments.Count;
 
             foreach (var segment in Segments)
             {
-                double sliceAngle = (segment.Weight / totalWeight) * 360;
+                var weight = fallbackEqual ? 1.0 : (double)Math.Max(0, segment.Weight);
+                double sliceAngle = (weight / totalWeight) * 360;
                 double endAngle = startAngle + sliceAngle;
 
                 // Convert to radians

@@ -7,35 +7,54 @@
 
 <PageTitle>Game Catalog</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Game Catalog</h1>
-</div>
+<div class="container-fluid">
+    <PageHeader Title="Game Catalog" Subtitle="Browse supported modules and launch new rooms">
+        <Actions>
+            <div class="input-group" style="max-width: 320px;">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input class="form-control" placeholder="Search games..." aria-label="Search games" @bind="search" />
+            </div>
+            <a class="btn btn-outline-secondary" href="templates">
+                <i class="bi bi-file-earmark-code"></i> Templates
+            </a>
+        </Actions>
+    </PageHeader>
 
-<div class="row row-cols-1 row-cols-md-3 g-4">
     @if (games == null)
     {
-        <p>Loading...</p>
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else if (!FilteredGames.Any())
+    {
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-search display-6"></i>
+            <p class="mt-2 mb-0">No games match “@search”.</p>
+        </div>
     }
     else
     {
-        @foreach (var game in games)
-        {
-            <div class="col">
-                <div class="card h-100 border-0 shadow-sm">
-                    <div class="card-body text-center">
-                        <div class="mb-3 display-4 text-primary">
-                            <i class="bi bi-joystick"></i>
-                        </div>
-                        <h3 class="card-title">@game.Name</h3>
-                        <p class="text-muted">Fully supported game module.</p>
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            @foreach (var game in FilteredGames)
+            {
+                <div class="col">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <div class="mb-3 display-4 text-primary">
+                                <i class="bi bi-joystick"></i>
+                            </div>
+                            <h3 class="card-title mb-1">@game.Name</h3>
+                            <div class="small text-muted mb-3">@game.Type</div>
 
-                        <button class="btn btn-primary w-100" @onclick="() => OpenCreateModal(game.Type)">
-                            <i class="bi bi-plus-circle"></i> Create Custom Room
-                        </button>
+                            <button class="btn btn-primary w-100" @onclick="() => OpenCreateModal(game)">
+                                <i class="bi bi-plus-circle"></i> Create Room
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        }
+            }
+        </div>
     }
 </div>
 
@@ -45,7 +64,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Create @selectedGame Room</h5>
+                    <h5 class="modal-title">Create @selectedGameName Room</h5>
                     <button type="button" class="btn-close" @onclick="CloseModal"></button>
                 </div>
                 <div class="modal-body">
@@ -79,7 +98,18 @@
 @code {
     private List<SupportedGameDto>? games;
     private bool showModal;
-    private string selectedGame = "";
+
+    private string search = "";
+
+    private string selectedGameType = "";
+    private string selectedGameName = "";
+
+    private IEnumerable<SupportedGameDto> FilteredGames =>
+        games?.Where(g =>
+            string.IsNullOrWhiteSpace(search) ||
+            g.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            g.Type.Contains(search, StringComparison.OrdinalIgnoreCase))
+        ?? Enumerable.Empty<SupportedGameDto>();
 
     // Form Model
     private int playerCount = 4;
@@ -91,11 +121,13 @@
         games = await AdminService.GetSupportedGamesAsync();
     }
 
-    private void OpenCreateModal(string gameName)
+    private void OpenCreateModal(SupportedGameDto game)
     {
-        selectedGame = gameName;
+        selectedGameType = game.Type;
+        selectedGameName = game.Name;
+
         // Smart defaults
-        if (gameName == "LuckyMine")
+        if (selectedGameType == "LuckyMine")
         {
             playerCount = 20;
             configJson = "{\"TotalMines\": 20}";
@@ -121,7 +153,7 @@
         if (playerCount < 1) playerCount = 1;
         if (playerCount > 20) playerCount = 20;
 
-        var roomId = await AdminService.CreateGameAsync(selectedGame, playerCount, entryFee, configJson);
+        var roomId = await AdminService.CreateGameAsync(selectedGameType, playerCount, entryFee, configJson);
         showModal = false;
 
         if (!string.IsNullOrEmpty(roomId))

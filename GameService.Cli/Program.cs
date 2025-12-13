@@ -96,6 +96,8 @@ public class Program
             Console.WriteLine("5. Daily Spin");
             Console.WriteLine("6. Transaction History");
             Console.WriteLine("7. Exit");
+            Console.WriteLine("8. Browse Lobby");
+            Console.WriteLine("9. Logout");
             Console.Write("\nSelect option: ");
 
             var input = Console.ReadLine();
@@ -121,6 +123,13 @@ public class Program
                     await ShowHistoryAsync();
                     break;
                 case "7":
+                    return;
+                case "8":
+                    await BrowseLobbyAsync();
+                    break;
+                case "9":
+                    await _session.LogoutAsync();
+                    Console.WriteLine("Logged out.");
                     return;
                 default:
                     Console.WriteLine("Invalid option.");
@@ -481,6 +490,27 @@ public class Program
             Console.WriteLine();
         }
         Console.WriteLine("----------------------------------");
+    }
+
+    private static async Task BrowseLobbyAsync()
+    {
+        Console.Write("Enter Game Type (e.g. Ludo, LuckyMine): ");
+        var type = Console.ReadLine()?.Trim() ?? "Ludo";
+        
+        Console.WriteLine($"Fetching {type} lobby...");
+        var rooms = await _session.Catalog.GetLobbyAsync(type);
+        
+        if (rooms.Count == 0)
+        {
+            Console.WriteLine("No public rooms found.");
+            return;
+        }
+
+        Console.WriteLine($"Found {rooms.Count} rooms:");
+        foreach (var room in rooms)
+        {
+            Console.WriteLine($"- {room.RoomId}: {room.CurrentPlayers}/{room.MaxPlayers} players");
+        }
     }
 
     private static void PrintLogo()

@@ -1,5 +1,6 @@
 ﻿@using GameService.Web.Components.Shared
 @inherits LayoutComponentBase
+@inject NavigationManager Nav
 
 <div class="page">
     <div class="sidebar">
@@ -18,6 +19,14 @@
             <div class="d-flex align-items-center gap-3">
                 <AuthorizeView>
                     <Authorized Context="authContext">
+                        <form class="d-none d-lg-flex align-items-center gap-2 me-2" @onsubmit="JumpToRoom" @onsubmit:preventDefault="true">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                                <input class="form-control" placeholder="Jump to Room ID…" aria-label="Room ID" autocomplete="off" @bind="jumpRoomId" />
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-outline-primary">Go</button>
+                        </form>
+
                         <div class="dropdown">
                             <button
                                 class="btn btn-link text-decoration-none dropdown-toggle d-flex align-items-center text-dark p-0"
@@ -25,7 +34,7 @@
                                 <div
                                     class="avatar bg-primary text-white rounded-circle me-2 d-flex align-items-center justify-content-center"
                                     style="width: 32px; height: 32px;">
-                                    @authContext.User.Identity?.Name?.Substring(0, 1).ToUpper()
+                                    @GetInitial(authContext.User.Identity?.Name)
                                 </div>
                                 <span class="d-none d-md-inline small fw-bold">@authContext.User.Identity?.Name</span>
                             </button>
@@ -58,6 +67,29 @@
                     </NotAuthorized>
                 </AuthorizeView>
             </div>
+
+@code {
+    private string? jumpRoomId;
+
+    private void JumpToRoom()
+    {
+        var id = jumpRoomId?.Trim();
+        if (string.IsNullOrWhiteSpace(id))
+            return;
+
+        jumpRoomId = string.Empty;
+        Nav.NavigateTo($"games/{Uri.EscapeDataString(id)}");
+    }
+
+    private static string GetInitial(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "?";
+
+        return name.Trim()[0].ToString().ToUpperInvariant();
+    }
+}
+
         </header>
 
         <article class="content px-4 py-4">

@@ -95,6 +95,13 @@
     letter-spacing: 0.01em;
 }
 
+.nav-section {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
+}
+
 .nav-scrollable {
     display: none;
 }

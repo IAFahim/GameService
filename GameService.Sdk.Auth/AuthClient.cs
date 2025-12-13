@@ -1,10 +1,10 @@
+namespace GameService.Sdk.Auth;
+
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GameService.Sdk.Core;
-
-namespace GameService.Sdk.Auth;
 
 public sealed class AuthClient : IDisposable
 {
@@ -194,6 +194,15 @@ public sealed class AuthClient : IDisposable
         return body.Length > 200 ? body[..200] : body;
     }
 
+    public async Task<bool> LogoutAsync(string accessToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/auth/logout");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await _http.SendAsync(request);
+        return response.IsSuccessStatusCode;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -213,12 +222,22 @@ public sealed class GameSession
 
     public bool IsValid => !string.IsNullOrEmpty(AccessToken);
 
+    public CatalogClient Catalog { get; }
+
     internal GameSession(string baseUrl, string accessToken, string? refreshToken, AuthClient authClient)
     {
         _baseUrl = baseUrl;
         AccessToken = accessToken;
         RefreshToken = refreshToken;
         _authClient = authClient;
+        
+        Catalog = new CatalogClient(baseUrl, () => Task.FromResult<string?>(AccessToken));
+    }
+
+    public async Task LogoutAsync()
+    {
+        await _authClient.LogoutAsync(AccessToken);
+        AccessToken = string.Empty;
     }
 
     public Task<GameClient> ConnectToGameAsync(CancellationToken cancellationToken = default)

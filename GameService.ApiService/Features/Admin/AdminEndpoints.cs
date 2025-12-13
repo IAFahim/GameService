@@ -465,7 +465,8 @@ public static class AdminEndpoints
                 p.UserId,
                 UserName = p.User.UserName ?? "Unknown",
                 Email = p.User.Email ?? "No Email",
-                p.Coins
+                p.Coins,
+                p.AvatarId
             })
             .ToListAsync();
 
@@ -477,7 +478,8 @@ public static class AdminEndpoints
             p.UserName, 
             p.Email, 
             p.Coins,
-            onlineUserIds.Contains(p.UserId)
+            onlineUserIds.Contains(p.UserId),
+            p.AvatarId
         )).ToList();
 
         return Results.Ok(dtos);
